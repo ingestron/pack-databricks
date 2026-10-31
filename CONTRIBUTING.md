@@ -1,8 +1,8 @@
 # Contributing
 
-Every package in `@ingestron/pack-databricks` must be understandable by someone who has never seen it:
-simple code, and documentation with enough examples to use it without reading
-the source. The rules below make that checkable.
+Code here should make sense to someone who has never seen it: simple code,
+and documentation good enough to use it without reading the source. The rules
+below make that checkable.
 
 ## Code
 
@@ -17,8 +17,8 @@ the source. The rules below make that checkable.
   a small interface, so it runs in Node, browsers and tests alike.
 - **Functions and plain objects first.** A class only for real state with a
   lifetime. No inheritance.
-- **Few dependencies.** Each runtime dependency needs a reason in the
-  package README.
+- **Few dependencies.** A pull request that adds a runtime dependency says
+  why it is needed.
 
 Writing style:
 
@@ -32,8 +32,7 @@ Writing style:
 | Shared guards written once (`isSafeKey`)               | The same check copied into several files |
 | Comments that explain why                              | Comments that repeat what the code says  |
 
-Every public export has a doc comment with an example. ESLint fails on a
-missing one. Packages meet only at their entry points: ESLint refuses an
+Every public export has a doc comment; ESLint fails on a missing one. Packages meet only at their entry points: ESLint refuses an
 import of another package's files or a relative path out of the package.
 
 ## Documentation
@@ -46,18 +45,16 @@ file; `pnpm validate` type-checks them all.
 
 ## Tests
 
-- Write the test first and watch it fail.
+- Every change in behaviour comes with a test that fails without it.
 - Test names read as sentences describing behaviour.
 
 ## Done means
 
-1. `pnpm validate` passes: format, lint, type-check, tests, examples, docs.
+1. `pnpm validate` passes.
 2. A public API change updates the API report (`pnpm api` writes `api/`), so
-   reviewers see the interface change, and the documentation site.
-3. **Fresh-reader check:** someone without prior context reads the changed
-   module and its docs and correctly explains what it does and how to use it.
-   What they misread is fixed in the code or docs.
-4. Report line counts and the number of public exports, so growth is visible.
+   reviewers see the interface change.
+3. A change users see updates the documentation site,
+   [ingestron/docs](https://github.com/ingestron/docs), in the same release.
 
 ## Licence
 

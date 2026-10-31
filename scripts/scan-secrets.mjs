@@ -6,12 +6,10 @@ const patterns = [
   ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{20,}\b/],
   ["GitHub fine-grained token", /\bgithub_pat_[A-Za-z0-9_]{60,}\b/],
-  ["OpenAI API key", /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/],
+  ["secret key (sk-…)", /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/],
   ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
-  [
-    "Supabase service-role JWT",
-    /SUPABASE_SERVICE_ROLE_KEY\s*=\s*eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
-  ],
+  ["Databricks token", /\bdapi[0-9a-f]{32}(?:-\d)?\b/],
+  ["Azure storage account key", /\bAccountKey=[A-Za-z0-9+/]{86}==/],
 ];
 
 export function detectSecrets(text) {

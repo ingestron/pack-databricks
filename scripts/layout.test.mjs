@@ -2,6 +2,7 @@
 // folder is a deliberate change to this list.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -45,6 +46,18 @@ test("every tracked top-level entry is on the list", () => {
   ];
   assert.deepEqual(
     entries.filter((entry) => !allowed.includes(entry)),
+    [],
+  );
+});
+
+test("no code reaches into a sibling repository's folder", () => {
+  const root = join(import.meta.dirname, "..");
+  const code = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
+    .split("\0")
+    .filter((path) => /\.(?:[cm]?[jt]sx?|json)$/.test(path));
+  const sibling = /["'`]\.\.\/(?:ingestron|pack-databricks|pack-adf|vscode|docs)\//;
+  assert.deepEqual(
+    code.filter((path) => sibling.test(readFileSync(join(root, path), "utf8"))),
     [],
   );
 });

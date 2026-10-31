@@ -54,12 +54,11 @@ src/retail/silver/daily_sales.sql
 resources/retail_refresh.job.yml
 ```
 
-## Checks
+## With the ADF pack
 
-`pnpm validate` runs the tests.
-
-Used with the [ADF pack](https://github.com/ingestron/pack-adf) (`packs: [databricks@1, adf@1]`),
-streaming tables read the files `adf-copy` lands, from its `landing` folder.
+Used with the [ADF pack](https://github.com/ingestron/pack-adf)
+(`packs: [databricks@1, adf@1]`), streaming tables read the files ADF lands,
+from its `landing` folder.
 
 ## Dependencies
 
