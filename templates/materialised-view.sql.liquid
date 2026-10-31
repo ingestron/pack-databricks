@@ -1,0 +1,4 @@
+-- {{ header }}
+{% render "table", table: table %}
+AS
+{% if query != "" %}{{ query }}{% else %}{% render "read-files", source: source %}{% endif %};

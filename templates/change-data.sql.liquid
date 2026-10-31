@@ -1,0 +1,20 @@
+-- {{ header }}
+-- Changes as received, each read once.
+CREATE OR REFRESH STREAMING TABLE {{ cdc.changes }}
+AS {% render "read-files", source: source %};
+
+-- The current rows{% if cdc.scd == 2 %}, with history{% endif %}, kept by key.
+{% render "table", table: table %};
+
+CREATE FLOW {{ cdc.flow }}
+AS AUTO CDC INTO {{ table.target }}
+FROM STREAM({{ cdc.changes }})
+KEYS ({{ cdc.keys }})
+{%- if cdc.delete_when != "" %}
+APPLY AS DELETE WHEN {{ cdc.delete_when }}
+{%- endif %}
+SEQUENCE BY {{ cdc.sequence }}
+{%- if cdc.except_columns != "" %}
+COLUMNS * EXCEPT ({{ cdc.except_columns }})
+{%- endif %}
+STORED AS SCD TYPE {{ cdc.scd }};

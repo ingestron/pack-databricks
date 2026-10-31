@@ -1,0 +1,7 @@
+{%- comment %} Ends without a newline: the caller continues after it. {% endcomment -%}
+SELECT {{ source.select }} FROM {% if source.stream %}STREAM {% endif %}read_files(
+  {{ source.path }}
+{%- for option in source.options %},
+  {{ option.key }} => {{ option.value }}
+{%- endfor %}
+){%- comment %}{% endcomment -%}

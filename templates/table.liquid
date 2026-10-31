@@ -1,0 +1,17 @@
+{%- comment %} Ends without a newline: the caller continues after it. {% endcomment -%}
+CREATE OR REFRESH {{ table.kind }} {{ table.target }}
+{%- if table.constraints.size > 0 %} (
+{%- for constraint in table.constraints %}
+  CONSTRAINT {{ constraint.name }} EXPECT ({{ constraint.check }}){{ constraint.on_violation }}{% unless forloop.last %},{% endunless %}
+{%- endfor %}
+)
+{%- endif %}
+{%- if table.comment != "" %}
+COMMENT {{ table.comment }}
+{%- endif %}
+{%- if table.cluster != "" %}
+CLUSTER BY {{ table.cluster }}
+{%- endif %}
+{%- if table.properties.size > 0 %}
+TBLPROPERTIES ({% for property in table.properties %}{{ property.key }} = {{ property.value }}{% unless forloop.last %}, {% endunless %}{% endfor %})
+{%- endif -%}

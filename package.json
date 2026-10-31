@@ -1,0 +1,77 @@
+{
+  "name": "@ingestron/pack-databricks",
+  "version": "1.0.0",
+  "description": "Databricks methods for Ingestron: generates a bundle with a Lakeflow Spark Declarative Pipeline.",
+  "license": "Apache-2.0",
+  "author": "IntentLabs <hello@ingestron.io>",
+  "homepage": "https://docs.ingestron.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingestron/pack-databricks.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ingestron/pack-databricks/issues",
+    "email": "hello@ingestron.io"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm build && tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check:docs": "tsx scripts/check-docs.ts",
+    "validate": "pnpm format:check && pnpm secrets:check && pnpm licences:check && node --test scripts/*.test.mjs && pnpm lint && pnpm typecheck && pnpm test && pnpm check:docs && pnpm check:api",
+    "api": "api-extractor run --local",
+    "check:api": "api-extractor run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "secrets:check": "node scripts/scan-secrets.mjs",
+    "licences:check": "node scripts/check-licences.mjs",
+    "dco:check": "node scripts/check-dco.mjs",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "liquidjs": "10.30.0",
+    "yaml": "2.9.1"
+  },
+  "peerDependencies": {
+    "@ingestron/definitions": "^1.0.0"
+  },
+  "devDependencies": {
+    "@ingestron/config": "^1.0.0",
+    "@ingestron/definitions": "^1.0.0",
+    "@microsoft/api-extractor": "7.59.4",
+    "@types/node": "22.20.5",
+    "ajv": "8.20.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-jsdoc": "65.4.2",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

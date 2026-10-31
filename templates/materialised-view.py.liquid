@@ -1,0 +1,28 @@
+# {{ header }}
+from pyspark import pipelines as dp
+
+# The transform's own code, unchanged:
+{{ code }}
+
+
+@dp.materialized_view(
+    name={{ name }},
+{%- if comment != "" %}
+    comment={{ comment }},
+{%- endif %}
+{%- if cluster != "" %}
+    {{ cluster }},
+{%- endif %}
+{%- if properties != "" %}
+    table_properties={{ properties }},
+{%- endif %}
+)
+{%- for group in expectations %}
+@dp.{{ group.decorator }}({{ group.checks }})
+{%- endfor %}
+def {{ wrapper }}():
+    return {{ function }}({
+{%- for input in inputs %}
+        {{ input.name }}: spark.read.table({{ input.table }}),
+{%- endfor %}
+    })
