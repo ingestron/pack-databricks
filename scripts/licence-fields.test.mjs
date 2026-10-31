@@ -34,3 +34,7 @@ test("LICENSE is the Apache License 2.0", () => {
 test("NOTICE names the copyright holder", () => {
   assert.match(read("NOTICE"), /Copyright 2026 Otrera Limited, trading as IntentLabs/);
 });
+
+test("the npm package ships the NOTICE", () => {
+  assert.ok(JSON.parse(read("package.json")).files.includes("NOTICE"));
+});
