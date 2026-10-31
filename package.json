@@ -26,7 +26,8 @@
   "files": [
     "dist",
     "templates",
-    "README.md"
+    "README.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
