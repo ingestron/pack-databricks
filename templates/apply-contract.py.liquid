@@ -1,0 +1,58 @@
+# {{ header }}
+# Runs after each refresh: Lakeflow pipelines cannot set tags or column
+# comments, nor compare counts over all rows, so this task does.
+import json
+
+from pyspark.sql import SparkSession
+
+STATEMENTS = json.loads(r"""{{ statements }}""")
+CHECKS = json.loads(r"""{{ checks }}""")
+
+
+def passes(operator, expected, measured):
+    """True when the measured count meets the rule's comparison."""
+    if operator == "mustBe":
+        return measured == expected
+    if operator == "mustNotBe":
+        return measured != expected
+    if operator == "mustBeGreaterThan":
+        return measured > expected
+    if operator == "mustBeGreaterOrEqualTo":
+        return measured >= expected
+    if operator == "mustBeLessThan":
+        return measured < expected
+    if operator == "mustBeLessOrEqualTo":
+        return measured <= expected
+    low, high = expected
+    inside = low <= measured <= high
+    return inside if operator == "mustBeBetween" else not inside
+
+
+def measure(spark, check):
+    """The rule's count, in rows or as a percentage of all rows."""
+    row = spark.sql(check["query"]).first()
+    counted, total = row["counted"] or 0, row["total"] or 0
+    if check["unit"] == "percent":
+        return 0 if total == 0 else counted * 100 / total
+    return counted
+
+
+def main():
+    spark = SparkSession.builder.getOrCreate()
+    for statement in STATEMENTS:
+        spark.sql(statement)
+    failures = []
+    for check in CHECKS:
+        measured = measure(spark, check)
+        if passes(check["operator"], check["value"], measured):
+            continue
+        message = f'{check["table"]}: {check["name"]} measured {measured}, expected {check["operator"]} {check["value"]}'
+        if check["action"] == "fail":
+            failures.append(message)
+        else:
+            print(f"Warning: {message}")
+    if failures:
+        raise RuntimeError("Table checks failed:\n" + "\n".join(failures))
+
+
+main()
