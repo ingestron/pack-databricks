@@ -1,7 +1,7 @@
 // Template data for a table's SQL file. All quoting happens here, so the
 // templates only arrange text. Key names avoid Liquid keywords (such as
 // `required` or `with`) because python-liquid refuses them after a dot.
-import { fullNameText, type ResolvedTable } from "@ingestron/definitions";
+import { fullNameText, type Column, type ResolvedTable } from "@ingestron/definitions";
 import { quoteName } from "./query.js";
 
 /** The table definition shared by every SQL file. */
@@ -74,14 +74,31 @@ function renamedColumns(table: ResolvedTable) {
   );
 }
 
-/** `*`, or `* EXCEPT (<source names>), <source> AS <name>, …` for renamed columns. */
+/**
+ * Timestamps the landed files carry beyond the contract (such as ADF's audit
+ * columns), which the step that adds them writes as ISO 8601 text.
+ */
+function textTimestamps(table: ResolvedTable): string[] {
+  const extra = (table.ingest?.output as { columns?: Column[] } | undefined)?.columns ?? [];
+  return extra.filter((column) => column.logicalType === "timestamp").map((column) => column.name);
+}
+
+/**
+ * `*`, or `* EXCEPT (<source names>), <source> AS <name>, …` for renamed
+ * columns, and `CAST(<name> AS TIMESTAMP) AS <name>` for timestamps written as text.
+ */
 function selectOf(table: ResolvedTable): string {
   const renamed = renamedColumns(table);
-  if (renamed.length === 0) return "*";
-  const sources = renamed.map((column) => quoteName(column.physicalName!));
-  const aliases = renamed.map(
-    (column) => `${quoteName(column.physicalName!)} AS ${quoteName(column.name)}`,
-  );
+  const timestamps = textTimestamps(table);
+  if (renamed.length === 0 && timestamps.length === 0) return "*";
+  const sources = [
+    ...renamed.map((column) => quoteName(column.physicalName!)),
+    ...timestamps.map(quoteName),
+  ];
+  const aliases = [
+    ...renamed.map((column) => `${quoteName(column.physicalName!)} AS ${quoteName(column.name)}`),
+    ...timestamps.map((name) => `CAST(${quoteName(name)} AS TIMESTAMP) AS ${quoteName(name)}`),
+  ];
   return `* EXCEPT (${sources.join(", ")}), ${aliases.join(", ")}`;
 }
 

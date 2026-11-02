@@ -60,6 +60,9 @@ Used with the [ADF pack](https://github.com/ingestron/pack-adf)
 (`packs: [databricks@1, adf@1]`), streaming tables read the files ADF lands,
 from its `landing` folder.
 
+Columns ADF adds to the landed rows (`audit_columns` in ADF 1.4) are read
+with the files; timestamps, which ADF writes as text, are cast to `TIMESTAMP`.
+
 ## Dependencies
 
 - [`@ingestron/definitions`](https://www.npmjs.com/package/@ingestron/definitions), a peer dependency: the resolved model.
