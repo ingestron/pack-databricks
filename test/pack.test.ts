@@ -1,6 +1,6 @@
 // Each Databricks option and refusal, on a one-table project in memory.
 import { memoryFiles } from "@ingestron/config";
-import { resolveDefinitions } from "@ingestron/definitions";
+import { resolveDefinitions, type Pack } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
 
@@ -168,5 +168,54 @@ describe("platform", () => {
       ),
     });
     expect(result.diagnostics[0]?.message).toContain('the connection needs "settings.path"');
+  });
+});
+
+describe("columns the landed files carry beyond the contract", () => {
+  /** Lands files where `landing` says, with two audit columns, as ADF's adf-copy describes them. */
+  const lander: Pack = {
+    ...databricks,
+    id: "lander",
+    rules: { ingest: { default: "land" } },
+    methods: {
+      land: {
+        action: "ingest",
+        description: "Lands files.",
+        connectors: ["files"],
+        produces: "files",
+        renames: true,
+        settings: { type: "object", properties: { landing: { type: "string" } } },
+        output: () => ({
+          location: "abfss://landing@acct.dfs.core.windows.net/shop/orders/*.parquet",
+          format: "parquet",
+          loads: "add",
+          columns: [
+            { name: "_loaded_at", logicalType: "timestamp", nullable: false },
+            { name: "_run_id", logicalType: "string", nullable: false },
+          ],
+        }),
+      },
+    },
+    build: () => ({}),
+  };
+
+  it("are read with the files, and timestamps cast", () => {
+    const result = resolveDefinitions(
+      memoryFiles({
+        ...base,
+        "standard.yaml":
+          "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@1, lander@1]\ningest: { settings: { land: { landing: 'abfss://landing@acct.dfs.core.windows.net/shop' } } }\n",
+        "flow.yaml": base["flow.yaml"]!.replace(
+          "source: files\n",
+          "source: files\ningest: { uses: land }\n",
+        ),
+      }),
+      { packs: [databricks, lander], environment: "dev" },
+    );
+    expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+    const sql = orders(databricks.build(result.model!));
+    expect(sql).toContain(
+      "AS SELECT * EXCEPT (`_loaded_at`), CAST(`_loaded_at` AS TIMESTAMP) AS `_loaded_at` FROM STREAM read_files(",
+    );
   });
 });

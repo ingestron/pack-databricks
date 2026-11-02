@@ -19,8 +19,8 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       '@ingestron/definitions':
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: ^1.5.0
+        version: 1.5.0
       '@microsoft/api-extractor':
         specifier: 7.59.4
         version: 7.59.4(@types/node@22.20.5)
@@ -291,8 +291,12 @@ packages:
     resolution: {integrity: sha512-LTnn5okBgypjtjvcAwhw3DW0OUNpQ5OtYOwy9xqF/kUDCWhwO0qoVmQpKz07qPH5gE8gqG1zxskgjJmqoYa3gA==}
     engines: {node: '>=22.13.0'}
 
-  '@ingestron/definitions@1.0.0':
-    resolution: {integrity: sha512-L1oCev5VfqqjfL4feW3M0tG3EYYnWYvb4s+GdrcE4rToNufhV6avCSbqv0ZAn1G5jyxp+oY+Qk+EI1qDv0rscw==}
+  '@ingestron/config@1.2.0':
+    resolution: {integrity: sha512-ZFxiP1sXBe3riFmPfxF1SuKYekAJ3y4P3Z+UeKHbTbfYcDs+CcqCoOW4M18l2dPeHJHc/Q95rq0TwnyIiENU7g==}
+    engines: {node: '>=22.13.0'}
+
+  '@ingestron/definitions@1.5.0':
+    resolution: {integrity: sha512-AX/X+h2TfN1BeAhCAs+BvwRTv/CV0PqJk2dr/7fKy7JpaClL+23EX3cNF97SoflC08dJBrWX8wzwEnSVLpwYjg==}
     engines: {node: '>=22.13.0'}
 
   '@jridgewell/resolve-uri@3.1.2':
@@ -1488,9 +1492,14 @@ snapshots:
       ajv: 8.20.0
       yaml: 2.9.1
 
-  '@ingestron/definitions@1.0.0':
+  '@ingestron/config@1.2.0':
     dependencies:
-      '@ingestron/config': 1.0.0
+      ajv: 8.20.0
+      yaml: 2.9.1
+
+  '@ingestron/definitions@1.5.0':
+    dependencies:
+      '@ingestron/config': 1.2.0
       ajv: 8.20.0
       liquidjs: 10.30.0
       yaml: 2.9.1
