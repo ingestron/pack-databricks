@@ -35,9 +35,11 @@ with a target per environment, which a tool writes to one folder (the CLI writes
 naming the definitions it comes from and saying not to edit it; the comment
 names no environment.
 
-`databricks.yml` has `sync: { exclude: [.generated.json, prerequisites/**] }`:
-the generation manifest and the grants files are in the bundle folder but are
-not deployed. The grants files are run by hand.
+`databricks.yml` has
+`sync: { exclude: [.generated.json, .generated.lock, prerequisites/**] }`: the
+generation manifest, its lock and the grants files are in the bundle folder but
+are not deployed. The lock is there only while files are written, or after
+writing stopped part way. The grants files are run by hand.
 
 `build(model)` gives the same layout for one environment, with one target and
 every value as the model resolves it. It is the fold property's render

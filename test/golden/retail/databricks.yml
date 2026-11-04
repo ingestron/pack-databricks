@@ -6,6 +6,7 @@ include:
 sync:
   exclude:
     - .generated.json
+    - .generated.lock
     - prerequisites/**
 variables:
   catalog:

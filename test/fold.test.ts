@@ -94,7 +94,7 @@ describe("prerequisites", () => {
     ]);
     expect(files["prerequisites/prod.sql"]).toContain("ON CATALOG `prod` TO");
     expect(yamlOf(files, "databricks.yml").sync).toEqual({
-      exclude: [".generated.json", "prerequisites/**"],
+      exclude: [".generated.json", ".generated.lock", "prerequisites/**"],
     });
   });
 
