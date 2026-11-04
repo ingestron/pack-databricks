@@ -131,11 +131,19 @@ function sqlFiles(model: ResolvedModel, groups: ConnectGroup[], output: Output):
   return [{ key: "refresh", pipeline, after: ingestion }];
 }
 
+/**
+ * The after-refresh script's path: in `tasks/`, outside every pipeline's `src/<pipeline>/**`
+ * sources whatever the naming standard, so that no pipeline loads it as its own code.
+ */
+export function scriptPath(pipeline: string): string {
+  return `tasks/${pipeline}/apply_contract.py`;
+}
+
 /** The Python file that applies tags, comments and table checks after every refresh. */
 function applyFiles(model: ResolvedModel, refreshes: Task[], output: Output): Task[] {
   const { statements, checks } = applyContract(model);
   if (statements.length === 0 && checks.length === 0) return [];
-  const path = `src/${model.names.pipeline}/apply_contract.py`;
+  const path = scriptPath(model.names.pipeline);
   output.files[path] = renderApply({ header: output.header, statements, checks });
   return [
     { key: "apply_contract", python: `../${path}`, after: refreshes.map((task) => task.key) },
