@@ -141,6 +141,7 @@ describe("presets", () => {
     expect(bundle.targets.prod.presets.trigger_pause_status).toBeUndefined();
     const job = yamlOf(files, "resources/shop_refresh.job.yml").resources.jobs.shop_refresh;
     expect(job.schedule.pause_status).toBeUndefined();
+    expect(foldFailures(models)).toEqual([]);
   });
 
   it("give way to a variable when a PAUSED preset would also stop a continuous pipeline", () => {

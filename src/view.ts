@@ -60,27 +60,41 @@ export function bundleView(
   const values = { ...supplied.variables, ...(settings.variables as Data | undefined) };
   const resolve = (node: unknown) => resolved(node, values);
   const presets = resolve(settings.presets ?? {}) as Data;
+  const development = settings.mode === "development";
   const code: Values = {};
   const view: Record<string, string> = {};
+  let continuous = false;
   for (const [path, text] of Object.entries(files)) {
-    if (path === "databricks.yml")
-      view[path] = stringify(resolve(bundleOf(bundle, target, supplied)));
-    else if (path.startsWith("resources/")) {
+    if (path.startsWith("resources/")) {
       const data = resolve(parse(text)) as Data;
-      applyPresets(data, presets, settings.mode === "development");
+      continuous ||= hasContinuous(data);
+      applyPresets(data, presets, development);
       takeValues(data, code);
       view[path] = stringify(data);
     } else if (path === `prerequisites/${target}.sql`) view[path] = deployTexts(text, supplied);
     else if (!path.startsWith("prerequisites/")) view[path] = text;
   }
+  const running = development && continuous && presets.trigger_pause_status === "UNPAUSED";
+  view["databricks.yml"] = stringify(resolve(bundleOf(bundle, target, supplied, running)));
   for (const [path, text] of Object.entries(view)) view[path] = withValues(path, text, code);
   return view;
 }
 
-function bundleOf(bundle: Data, target: string, supplied: Supplied): Data {
+/** True when a resource file has a pipeline that runs continuously. */
+function hasContinuous(data: Data): boolean {
+  const pipelines = ((data.resources as Data | undefined)?.pipelines ?? {}) as Record<string, Data>;
+  return Object.values(pipelines).some((pipeline) => pipeline.continuous === true);
+}
+
+/**
+ * The target alone. Development mode stops continuous pipelines unless an UNPAUSED preset
+ * replaces its own PAUSED one; no resource setting can say that, so such a preset stays.
+ */
+function bundleOf(bundle: Data, target: string, supplied: Supplied, running: boolean): Data {
   const settings = { ...(bundle.targets as Record<string, Data>)[target] };
   delete settings.variables;
   delete settings.presets;
+  if (running) settings.presets = { trigger_pause_status: "UNPAUSED" };
   const workspace = settings.workspace as Data | undefined;
   if (supplied.host && !workspace?.host) settings.workspace = { ...workspace, host: supplied.host };
   const { bundle: name, include, sync } = bundle;
