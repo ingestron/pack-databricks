@@ -10,12 +10,22 @@ const files: Record<string, string> = {
 };
 
 describe("platform fields", () => {
-  it("lists the settings it reads that have a default other than empty", () => {
+  it("lists every Platform setting it reads", () => {
     expect(databricks.platformFields).toEqual([
       "mode",
+      "workspace.host",
+      "workspace.root_path",
+      "run_as",
+      "permissions",
+      "tags",
       "compute.serverless",
+      "compute.budget_policy_id",
+      "compute.channel",
+      "schedule.cron",
       "schedule.timezone",
       "schedule.paused",
+      "notifications.on_failure",
+      "grants",
       "manage.schemas",
       "manage.tags",
       "manage.comments",
