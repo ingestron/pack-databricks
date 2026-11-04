@@ -23,6 +23,7 @@ const allowed = [
   "package.json",
   "pnpm-lock.yaml",
   "scripts",
+  "spec",
   "src",
   "templates",
   "test",

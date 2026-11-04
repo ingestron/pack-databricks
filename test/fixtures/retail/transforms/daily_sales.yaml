@@ -1,0 +1,7 @@
+apiVersion: ingestron.io/v1
+kind: Transform
+id: daily_sales
+description: Order totals per customer and day.
+inputs: [orders, customers]
+code: ${file:daily_sales.sql}
+contract: shop.daily_sales

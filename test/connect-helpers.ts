@@ -4,7 +4,7 @@ import { resolveDefinitions } from "@ingestron/definitions";
 import { parse } from "yaml";
 import { databricks } from "../src/index.js";
 
-const standard = "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@1]\n";
+const standard = "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\n";
 
 export function connection(id: string, connector: string, connectivity = "workspace") {
   return `apiVersion: ingestron.io/v1\nkind: Connection\nid: ${id}\nconnector: ${connector}\nconnectivity: ${connectivity}\nsettings: { uc_connection: ${id}_conn }\n`;
