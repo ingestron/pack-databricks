@@ -114,23 +114,29 @@ function jobTask(task: Task): Data {
 }
 
 /**
- * Bundle keys of the schemas this bundle manages, by `catalog.schema`: the layer, the
- * same in every environment, or `<catalog>_<schema>` for a layer with several schemas.
- * Empty unless `manage.schemas`.
+ * Bundle keys of the schemas this bundle manages, by `catalog.schema`, the same in every
+ * environment where only the catalog differs: the layer when the layer has one schema,
+ * else the schema's name. When two catalogs hold a schema of that name, or the key is
+ * taken, it is `<catalog>_<schema>`. Empty unless `manage.schemas`.
  */
 export function schemaKeys(model: ResolvedModel): Map<string, string> {
   if (!model.platform.manage.schemas) return new Map();
-  const schemas = new Map<string, string>();
+  const schemas = new Map<string, { catalog: string; schema: string; layer: string }>();
   for (const { fullName, layer } of model.tables)
-    schemas.set(`${fullName.catalog}.${fullName.schema}`, layer);
-  const perLayer = new Map<string, number>();
-  for (const layer of schemas.values()) perLayer.set(layer, (perLayer.get(layer) ?? 0) + 1);
-  return new Map(
-    [...schemas].map(([name, layer]) => [
-      name,
-      perLayer.get(layer) === 1 ? layer : name.replace(".", "_"),
-    ]),
-  );
+    schemas.set(`${fullName.catalog}.${fullName.schema}`, { ...fullName, layer });
+  const list = [...schemas.values()];
+  const keys = new Map<string, string>();
+  const used = new Set<string>();
+  for (const { catalog, schema, layer } of list) {
+    const alone = list.filter((other) => other.layer === layer).length === 1;
+    const shared = list.filter((other) => other.schema === schema).length > 1;
+    const both = `${catalog}_${schema}`;
+    const key = alone ? layer : shared ? both : schema;
+    const unique = used.has(key) ? both : key;
+    used.add(unique);
+    keys.set(`${catalog}.${schema}`, unique);
+  }
+  return keys;
 }
 
 /** A schema's name, or a reference to it when the bundle manages it, so the bundle creates it first. */
