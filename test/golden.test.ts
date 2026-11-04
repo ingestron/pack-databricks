@@ -59,6 +59,23 @@ const cases = {
   pyspark: { files: pyspark, environments: ["dev", "prod"] },
 };
 
+describe("a PySpark transform whose names differ", () => {
+  it("reads the table's name into a module-level constant, and its inputs inside the function", () => {
+    const models = resolveAll(pyspark, ["dev", "prod"]);
+    const python = fold(models).files["src/shop/silver/totals.py"] ?? "";
+    expect(python).toContain(
+      '# Values that differ between environments, from the pipeline\'s configuration.\ningestron_schema_silver = spark.conf.get("ingestron.schema_silver")\n\n\n@dp.materialized_view(\n    name=f"{ingestron_schema_silver}.totals",',
+    );
+    const body = python.slice(python.indexOf("def ingestron_totals():"));
+    expect(body).toContain(
+      'spark.read.table(spark.conf.get("ingestron.schema_bronze") + ".orders")',
+    );
+    expect(python.slice(0, python.indexOf("def ingestron_totals():"))).not.toContain(
+      "ingestron.schema_bronze",
+    );
+  });
+});
+
 describe("golden bundles", () => {
   for (const [name, { files, environments }] of Object.entries(cases)) {
     it(`folds ${name} (${environments.join(", ")}) into the files in test/golden/${name}`, () => {

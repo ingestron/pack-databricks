@@ -61,6 +61,16 @@ from. All were accessed on 2026-11-04 unless a date is given.
   work" beside pipeline parameters; parameters (`:key`) are SQL only. The pack
   uses configuration, with keys `ingestron.<name>`, so one mechanism serves SQL
   and Python.
+- Python reads of configuration values, inferred from
+  [Configure a pipeline](https://docs.databricks.com/aws/en/ldp/configure-pipeline)
+  ("For Python pipelines that need parameterization, the Configuration field
+  also exposes values to `spark.conf.get()`") and
+  [Develop pipeline code with Python](https://docs.databricks.com/aws/en/ldp/developer/python-dev),
+  whose "Create tables in a `for` loop" example computes a value at module level
+  and builds `@dp.materialized_view(name=f"…")` from it. A PySpark file reads each
+  value a decorator needs into a module-level constant in that pattern, and the
+  values for a table's inputs inside the function. No page shows
+  `spark.conf.get` in a decorator argument, so the pack never puts it there.
 - [Develop pipeline code with SQL](https://docs.databricks.com/aws/en/ldp/developer/sql-dev):
   "To read a configuration value in a query, use the string interpolation
   syntax `${}`." Interpolation is of text, so it reaches a `read_files` path,

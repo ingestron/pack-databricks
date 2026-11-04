@@ -119,7 +119,10 @@ function resolved(node: unknown, values: Data): unknown {
 /**
  * Presets as Databricks applies them: tags that a resource does not set, the pause of
  * schedules that do not set one (development mode pauses them), and no continuous
- * pipelines under a PAUSED preset.
+ * pipelines under a PAUSED preset the target writes. Development mode's own default
+ * PAUSED also stops continuous pipelines, but it does so in the target's own bundle
+ * too, which keeps `continuous: true` in its files; so the view keeps it as well, and
+ * marks only an UNPAUSED preset that lifts that default (see `bundleOf`).
  */
 function applyPresets(data: Data, presets: Data, development: boolean): void {
   const resources = { jobs: {}, pipelines: {}, ...(data.resources as Data | undefined) };
