@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { splitDeployText, type ResolvedModel, type SuppliedValue } from "@ingestron/definitions";
 import { parse, stringify } from "yaml";
 import type { Data } from "./bundle.js";
+import { mapStrings } from "./walk.js";
 
 /** What the deploying pipeline supplies for one target, as the deploy-time values' text. */
 export interface Supplied {
@@ -88,18 +89,13 @@ function bundleOf(bundle: Data, target: string, supplied: Supplied): Data {
 
 /** Each `${var.<name>}` replaced: a whole value by the variable's value, a part by its text. */
 function resolved(node: unknown, values: Data): unknown {
-  if (typeof node === "string") {
-    const whole = /^\$\{var\.([a-z0-9_]+)\}$/.exec(node);
+  return mapStrings(node, (text) => {
+    const whole = /^\$\{var\.([a-z0-9_]+)\}$/.exec(text);
     if (whole && values[whole[1]!] !== undefined) return values[whole[1]!];
-    return node.replace(/\$\{var\.([a-z0-9_]+)\}/g, (text, name: string) =>
-      values[name] === undefined ? text : String(values[name]),
+    return text.replace(/\$\{var\.([a-z0-9_]+)\}/g, (found, name: string) =>
+      values[name] === undefined ? found : String(values[name]),
     );
-  }
-  if (Array.isArray(node)) return node.map((item) => resolved(item, values));
-  if (node === null || typeof node !== "object") return node;
-  return Object.fromEntries(
-    Object.entries(node).map(([key, value]) => [key, resolved(value, values)]),
-  );
+  });
 }
 
 /**

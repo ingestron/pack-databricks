@@ -11,11 +11,16 @@ import {
 } from "@ingestron/definitions";
 import { placeOf, segments, variableName } from "./fold-names.js";
 import { foldCode, foldText, type TextFold } from "./fold-text.js";
-import { deployVariable, deployVariables, marker, placeVariable, supply } from "./fold-values.js";
+import {
+  deployVariable,
+  deployVariables,
+  marker,
+  placeVariable,
+  supply,
+  type Models,
+} from "./fold-values.js";
 import { differ, listOf } from "./fold-problems.js";
-
-/** The targets' models, by target name, in project.yaml's order. */
-export type Models = Readonly<Record<string, ResolvedModel>>;
+import { mapStrings } from "./walk.js";
 
 /** A fold's template, variables and the problems found while planning it. */
 export interface Plan extends TextFold {
@@ -176,16 +181,10 @@ function markDeployValues(plan: Plan): void {
       ),
     ).values(),
   ];
-  const walk = (node: unknown, pointer: string): unknown => {
-    if (notWalked.has(pointer)) return node;
-    if (typeof node === "string") return marked(plan, node, values);
-    if (Array.isArray(node)) return node.map((item, index) => walk(item, `${pointer}/${index}`));
-    if (node === null || typeof node !== "object") return node;
-    return Object.fromEntries(
-      Object.entries(node).map(([key, item]) => [key, walk(item, `${pointer}/${key}`)]),
-    );
-  };
-  plan.template = walk(plan.template, "") as ResolvedModel;
+  const mark = (text: string) => marked(plan, text, values);
+  plan.template = mapStrings(plan.template, mark, (pointer) =>
+    notWalked.has(pointer),
+  ) as ResolvedModel;
 }
 
 function marked(plan: Plan, text: string, values: DeployValue[]): string {
