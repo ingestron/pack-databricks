@@ -8,6 +8,7 @@ import type { Plan } from "./fold-plan.js";
 import { codeProblem, differ, listOf } from "./fold-problems.js";
 import { pauseOf, targetSettings, type Targets } from "./fold-target.js";
 import { hasMarker, marker, markers, type Variable } from "./fold-values.js";
+import { mapStrings } from "./walk.js";
 
 /** The folded files, and each target's host when it is supplied when deploying. */
 export interface Folded {
@@ -32,7 +33,7 @@ export function foldFiles(plan: Plan): Folded {
   const refresh = jobOf(files[`resources/${job}.job.yml`], job);
   parameterise(refresh, used.parameters);
   const targets = targetSettings(plan);
-  pause(plan, files, refresh, targets);
+  pause(plan, refresh, targets);
   for (const file of Object.values(files))
     if (typeof file !== "string") file.data = variablesIn(file.data) as Data;
   const declared = declare(plan, files, targets);
@@ -110,18 +111,10 @@ function parameterise(job: Data | undefined, names: Set<string>) {
 }
 
 /** The refresh job's pause, when it differs: unset in the job and set per target, or a variable. */
-function pause(
-  plan: Plan,
-  files: Record<string, YamlFile | string>,
-  job: Data | undefined,
-  targets: Targets,
-) {
+function pause(plan: Plan, job: Data | undefined, targets: Targets) {
   const schedule = job?.schedule as Data | undefined;
   if (!schedule) return;
-  const continuous = Object.values(files).some(
-    (file) => typeof file !== "string" && JSON.stringify(file.data).includes('"continuous":true'),
-  );
-  const how = pauseOf(plan, continuous);
+  const how = pauseOf(plan);
   if (how.kind === "same") return;
   if (how.kind === "variable") {
     schedule.pause_status = marker(how.variable.name);
@@ -136,11 +129,9 @@ function pause(
 
 /** Each marker in YAML becomes `${var.<name>}`. */
 function variablesIn(node: unknown): unknown {
-  if (typeof node === "string")
-    return node.replaceAll(markers, (_, name: string) => `\${var.${name}}`);
-  if (Array.isArray(node)) return node.map(variablesIn);
-  if (node === null || typeof node !== "object") return node;
-  return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, variablesIn(value)]));
+  return mapStrings(node, (text) =>
+    text.replaceAll(markers, (_, name: string) => `\${var.${name}}`),
+  );
 }
 
 /** Declares the variables the files use, sets them in each target, and writes the targets. */
@@ -159,7 +150,7 @@ function declare(
     ]),
   );
   for (const target of plan.targets) {
-    const set = declared.filter((variable) => setIn(variable, target));
+    const set = declared.filter((variable) => setsVariable(target, variable));
     const values = Object.fromEntries(
       set.map((variable) => [variable.name, variable.values[target]]),
     );
@@ -185,7 +176,8 @@ function describe(plan: Plan, variable: Variable): string {
   return `Supplied when deploying to ${listOf(supplied)}, as BUNDLE_VAR_${variable.name} (${variable.deploy} in the definitions); the other targets set it.`;
 }
 
-function setIn(variable: Variable, target: string): boolean {
+/** Whether a target sets the variable, rather than leaving it to the deploying CI pipeline. */
+function setsVariable(target: string, variable: Variable): boolean {
   return variable.values[target] !== undefined && !variable.supplied.has(target);
 }
 

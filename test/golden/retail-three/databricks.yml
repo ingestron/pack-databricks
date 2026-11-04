@@ -11,7 +11,7 @@ variables:
   catalog:
     description: Catalog of the retail tables.
   shop_path:
-    description: Folder the shop files are read from (connection shop).
+    description: Folder the files of connection "shop" are read from.
 targets:
   dev:
     mode: development

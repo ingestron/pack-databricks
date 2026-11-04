@@ -3,6 +3,9 @@
 // as a marker, which becomes `${var.<name>}` or `${ingestron.<name>}`.
 import type { EnvironmentsProblem, ResolvedModel } from "@ingestron/definitions";
 
+/** The targets' models, by target name, in project.yaml's order. */
+export type Models = Readonly<Record<string, ResolvedModel>>;
+
 /** One bundle variable. */
 export interface Variable {
   name: string;
@@ -20,7 +23,7 @@ export interface Variable {
 /** Every variable of a fold, in the order made. */
 export interface Variables {
   list: Variable[];
-  /** Variables for values that differ, by their values in target order. */
+  /** Variables for values that differ, by the name their place gives and their values in target order. */
   byValues: Map<string, Variable>;
 }
 
@@ -52,13 +55,16 @@ function unique(variables: Variables, name: string): string {
   return candidate;
 }
 
-/** The variable for a value that differs: the same one for the same values in every target. */
+/**
+ * The variable for a value that differs: places of the same kind (the same name) with the
+ * same value in every target share one, such as the catalog of every table.
+ */
 export function placeVariable(
   variables: Variables,
   place: { name: string; description: string; complex?: boolean },
   values: Record<string, unknown>,
 ): Variable {
-  const key = JSON.stringify(Object.values(values));
+  const key = JSON.stringify([place.name, Object.values(values)]);
   const found = variables.byValues.get(key);
   if (found) return found;
   const variable = {

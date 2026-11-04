@@ -9,9 +9,9 @@ import {
 } from "@ingestron/definitions";
 import { build } from "./build.js";
 import { foldFiles, type Folded } from "./fold-files.js";
-import { pipelineCatalog, planFold, type Models } from "./fold-plan.js";
+import { pipelineCatalog, planFold } from "./fold-plan.js";
 import { catalogProblems, continuousProblems, differ, listOf, once } from "./fold-problems.js";
-import type { Variable } from "./fold-values.js";
+import type { Models, Variable } from "./fold-values.js";
 import { bundleView, sameFile, suppliedFor } from "./view.js";
 
 /**
