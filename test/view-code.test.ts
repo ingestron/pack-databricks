@@ -46,6 +46,50 @@ describe("values in code", () => {
     expect(task.spark_python_task.parameters).toBeUndefined();
   });
 
+  it("come from the pipeline's configuration in a PySpark file: module-level constants and reads in the body", () => {
+    const python = [
+      "# Values that differ between environments, from the pipeline's configuration.",
+      'ingestron_schema_silver = spark.conf.get("ingestron.schema_silver")',
+      "",
+      "",
+      "@dp.materialized_view(",
+      '    name=f"{ingestron_schema_silver}.totals",',
+      '    comment=f"Totals {{per day}}",',
+      ")",
+      "def ingestron_totals():",
+      "    return transform({",
+      '        "orders": spark.read.table(spark.conf.get("ingestron.schema_bronze") + ".orders"),',
+      "    })",
+      "",
+    ].join("\n");
+    const files = {
+      "databricks.yml": bundle(
+        { variables: { silver: "silver_dev", bronze: "bronze_dev" } },
+        { silver: {}, bronze: {} },
+      ),
+      "resources/shop.pipeline.yml": pipeline({
+        configuration: {
+          "ingestron.schema_silver": "${var.silver}",
+          "ingestron.schema_bronze": "${var.bronze}",
+        },
+      }),
+      "src/shop/silver/totals.py": python,
+    };
+    expect(bundleView(files, "dev", none)["src/shop/silver/totals.py"]).toBe(
+      [
+        "@dp.materialized_view(",
+        '    name="silver_dev.totals",',
+        '    comment=f"Totals {{per day}}",',
+        ")",
+        "def ingestron_totals():",
+        "    return transform({",
+        '        "orders": spark.read.table("bronze_dev.orders"),',
+        "    })",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("keep only the target's grants file, with each placeholder as its deploy-time value", () => {
     const files = {
       "databricks.yml": bundle({}),

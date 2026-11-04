@@ -168,12 +168,20 @@ places where values differ in the order `compareTargets` gives them.
   (section 2).
 - **In a PySpark transform's file** (`src/<pipeline>/**/*.py`), a variable
   inside a double-quoted text the pack writes, such as the table's `name` or an
-  input's name, is read with `spark.conf.get("ingestron.<name>")`, joined to the
-  rest of the text: `"⟦schema_silver⟧.totals"` becomes
-  `spark.conf.get("ingestron.schema_silver") + ".totals"`. The pipeline gets the
-  configuration `ingestron.<name>: ${var.<name>}`, as for SQL. A variable in
-  the transform's own code, which the pack copies as it is, is refused
-  (section 5).
+  input's name, is read with `spark.conf.get("ingestron.<name>")`:
+  - before the table's function (the decorators, evaluated when the file
+    loads), each value is read once into a module-level constant
+    `ingestron_<name>`, under the comment
+    `# Values that differ between environments, from the pipeline's configuration.`
+    above the first decorator, and the text becomes an f-string, with braces in
+    the rest of the text doubled: `"⟦schema_silver⟧.totals"` becomes
+    `f"{ingestron_schema_silver}.totals"`;
+  - inside the function, which builds the transform's inputs, the read stays in
+    the body, joined to the rest of the text:
+    `spark.conf.get("ingestron.schema_bronze") + ".orders"`. The pipeline gets the
+    configuration `ingestron.<name>: ${var.<name>}`, as for SQL. A variable in
+    the transform's own code, which the pack copies as it is, is refused
+    (section 5).
 - **In a path or a YAML key**, a variable is refused (section 5): file names
   and resource keys must be the same in every target.
 
@@ -260,16 +268,19 @@ For a target `e`:
   - `e`'s presets applied to every job and pipeline: each preset tag the
     resource does not set; a schedule without `pause_status` gets the preset's,
     else `PAUSED` in `development` mode, else `UNPAUSED`; a `PAUSED` preset
-    removes `continuous` from every pipeline. Development mode stops continuous
+    removes `continuous` from every pipeline. Development mode's own default
+    `PAUSED` stops them in the target's own bundle too, whose files keep
+    `continuous: true`, so the view keeps it. Development mode stops continuous
     pipelines through its own default `PAUSED` preset, unless an `UNPAUSED`
     preset replaces it, and no resource setting can say that: so in a
     `development` target with an `UNPAUSED` preset and a continuous pipeline,
     the view's target keeps `presets: { trigger_pause_status: UNPAUSED }`;
   - each pipeline's `ingestron.*` configuration replaces `${ingestron.<name>}`
-    in the SQL files under its `root_path`, and, in the Python files there, each
-    `spark.conf.get("ingestron.<name>")` by its value as a JSON text, joined with
-    the texts beside it that it was joined to with `+`; it is then removed from
-    the pipeline. Each `ingestron.*` task parameter replaces `${ingestron.<name>}`
+    in the SQL files under its `root_path`; in the Python files there, the
+    module-level constants are removed, each f-string that uses them becomes a
+    JSON text with their values, and each `spark.conf.get("ingestron.<name>")` in
+    the body becomes its value as a JSON text, joined with the texts it was
+    joined to with `+`. The configuration is then removed from the pipeline. Each `ingestron.*` task parameter replaces `${ingestron.<name>}`
     in its Python file, written as JSON writes the text inside a string, and is
     removed from the task;
   - only `prerequisites/e.sql`, with each `<value of NAME>` written
