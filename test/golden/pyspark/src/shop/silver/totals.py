@@ -8,8 +8,12 @@ def transform(tables):
     return tables["orders"].groupBy("id").agg(F.sum("total").alias("total"))
 
 
+# Values that differ between environments, from the pipeline's configuration.
+ingestron_schema_silver = spark.conf.get("ingestron.schema_silver")
+
+
 @dp.materialized_view(
-    name=spark.conf.get("ingestron.schema_silver") + ".totals",
+    name=f"{ingestron_schema_silver}.totals",
     cluster_by_auto=True,
 )
 @dp.expect_all({"id_not_null": "`id` IS NOT NULL"})

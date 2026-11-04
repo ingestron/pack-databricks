@@ -159,9 +159,9 @@ sources, so that only the refresh job runs it.
 - `prerequisites.sql` is `prerequisites/<environment>.sql`.
 - Environments may differ only in values. A table built in some environments
   only, or code that differs in more than a value, is `ENVIRONMENTS_DIFFER`.
-  A PySpark transform reads names that differ with
-  `spark.conf.get("ingestron.<name>")`; values in its own code cannot differ
-  yet.
+  A PySpark transform reads names that differ from the pipeline's
+  configuration with `spark.conf.get("ingestron.<name>")`, into a module-level
+  constant for its decorator; values in its own code cannot differ yet.
 - Needs `@ingestron/definitions` 1.8 or later, and Databricks CLI v0.264.0 or
   later, which adds preset tags to pipelines.
 
