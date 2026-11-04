@@ -27,6 +27,8 @@ export interface Plan extends TextFold {
   template: ResolvedModel;
   /** The tags that are not the same in every target, by target. */
   tags: Record<string, Record<string, string>>;
+  /** Values that differ but are not text or lists, left as the first target has them. */
+  unfolded: TargetDifference[];
 }
 
 /** Values Databricks sets per target, written in each target as they are. */
@@ -47,6 +49,7 @@ export function planFold(models: Models, differing: readonly TargetDifference[])
     problems: [],
     template: structuredClone(first),
     tags: splitTags(models, targets),
+    unfolded: [],
   };
   for (const difference of differing) foldPlace(plan, difference, catalogs);
   for (const [index, table] of plan.template.tables.entries())
@@ -66,15 +69,12 @@ function foldPlace(plan: Plan, difference: TargetDifference, catalogs: (string |
   if (perTarget.test(pointer) || inputs.test(pointer)) return;
   const path = segments(pointer);
   if (path[0] === "names") return plan.problems.push(renamed(plan, path[1]!, values));
-  if (!plan.targets.every((target) => values[target] !== undefined)) return;
+  if (!plan.targets.every((target) => values[target] !== undefined))
+    return plan.unfolded.push(difference);
   if (path[2] === "transform" && path[3] === "code" && path.length === 4)
     return foldTableCode(plan, Number(path[1]), values as Record<string, string>);
-  foldValue(
-    plan,
-    pointer,
-    values,
-    JSON.stringify(Object.values(values)) === JSON.stringify(catalogs),
-  );
+  const pipeline = JSON.stringify(Object.values(values)) === JSON.stringify(catalogs);
+  if (!foldValue(plan, pointer, values, pipeline)) plan.unfolded.push(difference);
 }
 
 /**
@@ -87,20 +87,21 @@ function foldValue(
   pointer: string,
   values: Record<string, unknown>,
   pipeline: boolean,
-) {
+): boolean {
   const all = Object.values(values);
   const first = plan.models[plan.targets[0]!]!;
   const path = segments(pointer);
   if (all.every((value) => typeof value === "string")) {
     const place = placeOf(pointer, first, pipeline);
     setAt(plan.template, path, foldText(plan, values as Record<string, string>, place));
-  } else if (
-    all.every((value) => Array.isArray(value)) &&
-    !JSON.stringify(all).includes("${envvar:")
-  ) {
+    return true;
+  }
+  if (all.every((value) => Array.isArray(value)) && !JSON.stringify(all).includes("${envvar:")) {
     const place = { ...placeOf(pointer, first, false), complex: true };
     setAt(plan.template, path, marker(placeVariable(plan.variables, place, values).name));
+    return true;
   }
+  return false;
 }
 
 function renamed(plan: Plan, what: string, values: Record<string, unknown>): EnvironmentsProblem {

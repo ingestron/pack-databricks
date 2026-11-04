@@ -6,11 +6,12 @@ import {
   type EnvironmentsBuild,
   type EnvironmentsProblem,
   type SuppliedValue,
+  type TargetDifference,
 } from "@ingestron/definitions";
 import { build } from "./build.js";
 import { foldFiles, type Folded } from "./fold-files.js";
 import { pipelineCatalog, planFold } from "./fold-plan.js";
-import { catalogProblems, continuousProblems, differ, listOf, once } from "./fold-problems.js";
+import { catalogProblems, continuousProblems, once, unlikeProblem } from "./fold-problems.js";
 import type { Models, Variable } from "./fold-values.js";
 import { bundleView, sameFile, suppliedFor } from "./view.js";
 
@@ -29,7 +30,7 @@ export function buildEnvironments(models: Models): EnvironmentsBuild {
   const problems = once(plan.problems);
   if (problems.some((problem) => problem.severity === "error")) return failed(problems);
   const deployValues = supplied(models, folded);
-  const unlike = viewProblems(models, folded.files, deployValues);
+  const unlike = viewProblems(models, folded.files, deployValues, plan.unfolded);
   if (unlike.length > 0) return failed(unlike);
   return { files: folded.files, deployValues, problems };
 }
@@ -61,7 +62,12 @@ function supplied(models: Models, folded: Folded): SuppliedValue[] {
  * The fold property, checked when generating: each target's view of the folded files is
  * what `build` gives for that target alone. What differs is ENVIRONMENTS_DIFFER.
  */
-function viewProblems(models: Models, files: Record<string, string>, values: SuppliedValue[]) {
+function viewProblems(
+  models: Models,
+  files: Record<string, string>,
+  values: SuppliedValue[],
+  unfolded: TargetDifference[],
+) {
   const unlike = new Map<string, string[]>();
   for (const [target, model] of Object.entries(models)) {
     const viewed = bundleView(files, target, suppliedFor(model, values));
@@ -75,10 +81,5 @@ function viewProblems(models: Models, files: Record<string, string>, values: Sup
       if (!same) unlike.set(path, [...(unlike.get(path) ?? []), target]);
     }
   }
-  return [...unlike].map(([path, targets]) =>
-    differ(
-      `${path} cannot be generated once for every environment: in ${listOf(targets)} it would not be what that environment gets on its own, because the environments differ there in more than values.`,
-      "project.yaml",
-    ),
-  );
+  return [...unlike].map(([path, targets]) => unlikeProblem(models, path, targets, unfolded));
 }
