@@ -70,13 +70,14 @@ variables:
   catalog:
     description: Catalog of the retail tables.
   shop_path:
-    description: Folder the shop files are read from (connection shop).
+    description: Folder the files of connection "shop" are read from.
 targets:
   dev:
     mode: development
     default: true
     workspace:
       host: https://adb-1111111111111111.1.azuredatabricks.net
+    # run_as and permissions, as the platform sets them
     presets:
       tags:
         environment: dev
@@ -85,7 +86,7 @@ targets:
       shop_path: abfss://landing@retaildev.dfs.core.windows.net/shop
   prod:
     mode: production
-    # …
+    # prod's workspace, run_as, permissions, presets and variables
 ```
 
 The pipeline reads them as `catalog: ${var.catalog}` and as the configuration
@@ -106,11 +107,16 @@ databricks bundle deploy -t prod
 
 A value written as `${envvar:NAME}` in the definitions is supplied when
 deploying: the bundle declares it as a variable that the targets leave unset,
-and the pipeline sets `BUNDLE_VAR_<name>` (`name` is NAME in lower case). A
-workspace host supplied this way is `DATABRICKS_HOST`.
+and the deploying CI pipeline sets `BUNDLE_VAR_<name>` (`name` is NAME in lower
+case). A workspace host supplied this way is `DATABRICKS_HOST`.
 
 `prerequisites/<environment>.sql` holds the grants an administrator runs once
-in that environment. It is not deployed.
+in that environment. It is not deployed, and neither are `.generated.json` and
+`.generated.lock`, which `ingestron` keeps in the folder.
+
+The after-refresh task (tags, column comments and table checks) is
+`tasks/<pipeline>/apply_contract.py`, outside the pipeline's `src/<pipeline>/`
+sources, so that only the refresh job runs it.
 
 ## What changed in 2.0
 
@@ -118,20 +124,46 @@ in that environment. It is not deployed.
   bundle per environment in `build/<environment>/`. Change the standard to
   `databricks@2`.
 - The bundle name, pipeline and job keys, target names and `root_path` are the
-  same as in 1.x, so the first `bundle deploy -t <environment>` updates that
-  environment's resources in place. Run `bundle validate` and `bundle summary`
-  first.
-- Managed schemas are keyed by layer (`bronze`), not `<catalog>_<schema>`.
-  With `manage.schemas`, bind each existing schema to its new key with
-  `databricks bundle deployment bind` before the first deploy.
+  same as in 1.x, so the first `bundle deploy -t dev` or `-t prod` updates
+  that environment's resources in place. Run `bundle validate` and
+  `bundle summary` first.
+- The mode is `production` for every environment except `dev`, unless the
+  platform sets it. In 1.x, environments such as `test`, `uat` and `staging`
+  were in `development` mode. On their first 2.0 deploy, jobs and pipelines
+  lose the `[dev <identity>]` prefix in their names, pipelines are no longer in
+  development, managed schemas lose their `dev_<identity>_` prefix (the old
+  schema is deleted after approval, and the pipelines write to a new one), and
+  production mode wants `run_as` and `permissions` unless a service principal
+  deploys. To keep `development` mode for such an environment, write
+  `mode: ${values.mode}` in the platform, `mode: production` in project.yaml's
+  `values`, and `mode: development` in that environment's `values`.
+- Managed schemas are keyed by layer (`bronze`), or by schema name when a
+  layer has several (`bronze_shop`), not `<catalog>_<schema>`. Each
+  environment's deployment state still holds the old key, so with
+  `manage.schemas`, before the first 2.0 deploy, for each environment and each
+  managed schema:
+  1. in the 1.x folder `build/<environment>/`, run
+     `databricks bundle deployment unbind <catalog>_<schema> -t <environment>`;
+  2. in `build/databricks/`, run
+     `databricks bundle deployment bind <key> <catalog>.<schema> -t <environment>`,
+     with the key from `resources/schemas.yml`;
+  3. run `bundle validate` and `bundle summary`, and check that the deploy
+     deletes no schema.
+
+  Without this, the deploy plans to delete each schema under its old key.
+
+- The after-refresh script moved from `src/<pipeline>/apply_contract.py`,
+  where the pipeline also loaded it as its own code, to
+  `tasks/<pipeline>/apply_contract.py`. The first deploy removes the old file.
 - Pipeline code names tables in the pipeline's catalog with two parts.
 - `prerequisites.sql` is `prerequisites/<environment>.sql`.
-- The mode is `production` for every environment except `dev`, unless the
-  platform sets it.
 - Environments may differ only in values. A table built in some environments
   only, or code that differs in more than a value, is `ENVIRONMENTS_DIFFER`.
-  PySpark transforms cannot take values that differ yet.
-- Needs `@ingestron/definitions` 1.8 or later.
+  A PySpark transform reads names that differ with
+  `spark.conf.get("ingestron.<name>")`; values in its own code cannot differ
+  yet.
+- Needs `@ingestron/definitions` 1.8 or later, and Databricks CLI v0.264.0 or
+  later, which adds preset tags to pipelines.
 
 The rules are in [spec/behaviour.md](spec/behaviour.md).
 
@@ -151,13 +183,14 @@ with the files; timestamps, which ADF writes as text, are cast to `TIMESTAMP`.
   `templates/` and the transforms' SQL.
 - [`yaml`](https://eemeli.org/yaml/): writes the bundle's YAML files.
 
-## Sources (accessed 2026-10-24)
+## Sources
 
-Bundle variables, targets and presets: [spec/references.md](spec/references.md)
-(accessed 2026-11-04).
+Bundle variables, targets, presets and pipeline configuration:
+[spec/references.md](spec/references.md) (accessed 2026-11-04). Bundle fields
+from Databricks CLI v1.23.0 `databricks bundle schema` (2026-11-04).
 
-Bundle fields from Databricks CLI v1.22.1 `databricks bundle schema` and
-`databricks/bundle-examples` (`lakeflow_pipelines_sql`). SQL from
+Accessed 2026-10-24: `databricks/bundle-examples` (`lakeflow_pipelines_sql`).
+SQL from
 [CREATE STREAMING TABLE](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-streaming-table.html),
 [CREATE MATERIALIZED VIEW](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-materialized-view),
 [AUTO CDC INTO](https://docs.databricks.com/aws/en/dlt-ref/dlt-sql-ref-apply-changes-into),
