@@ -8,10 +8,10 @@ import { stringify } from "yaml";
 export type Data = Record<string, unknown>;
 
 /**
- * Files in the bundle folder that are not deployed: the generation manifest, and the
- * grants an administrator runs by hand.
+ * Files in the bundle folder that are not deployed: the generation manifest, its lock
+ * (left behind if writing stops part way), and the grants an administrator runs by hand.
  */
-export const notDeployed = [".generated.json", "prerequisites/**"];
+export const notDeployed = [".generated.json", ".generated.lock", "prerequisites/**"];
 
 /** `databricks.yml`: one target, named after the environment. */
 export function bundleFile(model: ResolvedModel): Data {
