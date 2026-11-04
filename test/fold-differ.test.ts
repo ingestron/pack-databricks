@@ -64,9 +64,7 @@ describe("ENVIRONMENTS_DIFFER", () => {
     ]);
   });
 
-  it("refuses a PySpark transform whose table names differ, since Python takes no bundle values", () => {
-    const standard =
-      "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\nnaming: { schema: '{{ layer }}_{{ environment }}' }\n";
+  it("refuses values that differ in a PySpark transform's own code, which the pack copies as it is", () => {
     const totals = [
       "apiVersion: ingestron.io/v1",
       "kind: Transform",
@@ -76,18 +74,17 @@ describe("ENVIRONMENTS_DIFFER", () => {
       "transform: { uses: pyspark }",
       "code: |",
       "  def transform(tables):",
-      '      return tables["orders"]',
+      '      return tables["orders"].where("region = \'${values.region}\'")',
       "",
     ].join("\n");
-    const models = resolveAll(shop(two, { "standard.yaml": standard, "totals.yaml": totals }), [
-      "dev",
-      "prod",
-    ]);
+    const environments =
+      "  dev: { values: { region: north } }\n  prod: { values: { region: south } }\n";
+    const models = resolveAll(shop(environments, { "totals.yaml": totals }), ["dev", "prod"]);
     expect(fold(models).problems).toMatchObject([
       {
         code: "ENVIRONMENTS_DIFFER",
         message:
-          'The Python file of table "totals" would need values that differ between environments (schema_bronze, schema_silver); Python transforms cannot take them yet.',
+          'The code of PySpark transform "totals" would need values that differ between environments (totals_value); a PySpark transform\'s own code cannot take them yet.',
         file: "totals.yaml",
       },
     ]);

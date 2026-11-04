@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { fold, foldFailures, folderFiles, resolveAll, retail } from "./fold-helpers.js";
+import { fold, foldFailures, folderFiles, resolveAll, retail, shop } from "./fold-helpers.js";
 
 const threeEnvironments = [
   "id: retail",
@@ -30,12 +30,33 @@ const threeEnvironments = [
   "",
 ].join("\n");
 
+/** A PySpark transform whose tables' schemas differ by environment, read with spark.conf.get. */
+const pyspark = shop("  dev: {}\n  prod: {}\n", {
+  "standard.yaml":
+    "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\nnaming: { schema: '{{ layer }}_{{ environment }}' }\n",
+  "totals.yaml": [
+    "apiVersion: ingestron.io/v1",
+    "kind: Transform",
+    "id: totals",
+    "inputs: [orders]",
+    "contract: orders",
+    "transform: { uses: pyspark }",
+    "code: |",
+    "  from pyspark.sql import functions as F",
+    "",
+    "  def transform(tables):",
+    '      return tables["orders"].groupBy("id").agg(F.sum("total").alias("total"))',
+    "",
+  ].join("\n"),
+});
+
 const cases = {
   retail: { files: retail, environments: ["dev", "prod"] },
   "retail-three": {
     files: { ...retail, "project.yaml": threeEnvironments },
     environments: ["dev", "test", "prod"],
   },
+  pyspark: { files: pyspark, environments: ["dev", "prod"] },
 };
 
 describe("golden bundles", () => {
