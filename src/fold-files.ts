@@ -24,8 +24,9 @@ export function foldFiles(plan: Plan): Folded {
   const { pipeline, job } = plan.template.names;
   const used = { configuration: new Set<string>(), parameters: new Set<string>() };
   for (const [path, file] of Object.entries(files)) {
-    if (hasMarker(path) || (typeof file !== "string" && markedKeys(file.data)))
-      plan.problems.push(named(path));
+    if (hasMarker(path)) plan.problems.push(named(path));
+    const key = typeof file === "string" ? undefined : markedKey(file.data);
+    if (key !== undefined) plan.problems.push(keyed(path, key));
     if (path.startsWith("prerequisites/")) delete files[path];
     else if (typeof file === "string") files[path] = foldCodeFile(plan, path, file, used, origins);
   }
@@ -57,15 +58,31 @@ function addPrerequisites(plan: Plan, files: Record<string, YamlFile | string>):
 
 function named(path: string) {
   return differ(
-    `The generated file ${path.replaceAll(markers, "<$1>")} would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`,
+    `The generated file ${shown(path)} would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`,
     "project.yaml",
   );
 }
 
-/** True when a key anywhere in a YAML document holds a marker. */
-function markedKeys(node: unknown): boolean {
-  if (node === null || typeof node !== "object") return false;
-  return Object.entries(node).some(([key, value]) => hasMarker(key) || markedKeys(value));
+function keyed(path: string, key: string) {
+  return differ(
+    `The resource key ${shown(key)} in ${path} would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`,
+    "project.yaml",
+  );
+}
+
+/** A text with each marker shown as `<variable>`. */
+function shown(text: string): string {
+  return text.replaceAll(markers, (_, name: string) => `<${name}>`);
+}
+
+/** The first key in a YAML document that holds a marker. */
+function markedKey(node: unknown): string | undefined {
+  if (node === null || typeof node !== "object") return undefined;
+  for (const [key, value] of Object.entries(node)) {
+    const found = hasMarker(key) ? key : markedKey(value);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /** Pipeline SQL takes `${ingestron.<name>}` from the pipeline's configuration; the script, from parameters. */

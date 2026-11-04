@@ -109,3 +109,43 @@ describe("prerequisites", () => {
     expect(foldFailures(models)).toEqual([]);
   });
 });
+
+describe("managed schemas, several in one layer", () => {
+  const files = (schema: string) =>
+    shop("  dev: {}\n  prod: {}\n", {
+      "standard.yaml": `apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\nnaming: { schema: '${schema}' }\n`,
+      "platform.yaml":
+        "apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\nmanage: { schemas: true }\n",
+      "web.yaml":
+        "apiVersion: ingestron.io/v1\nkind: Flow\nid: web\nsource: files\ntables:\n  visits: { object: visits, contract: orders }\n",
+    });
+
+  it("are keyed by schema name, the same in every environment", () => {
+    const models = resolveAll(files("{{ layer }}_{{ flow }}"), ["dev", "prod"]);
+    const { files: folded, problems } = fold(models);
+    expect(problems).toEqual([]);
+    const schemas = yamlOf(folded, "resources/schemas.yml").resources.schemas;
+    expect(Object.keys(schemas)).toEqual(["bronze_shop", "bronze_web"]);
+    expect(schemas.bronze_web).toMatchObject({
+      catalog_name: "${var.catalog}",
+      name: "bronze_web",
+    });
+    expect(foldFailures(models)).toEqual([]);
+  });
+
+  it("whose names differ between environments are refused, naming the resource key", () => {
+    const models = resolveAll(files("{{ layer }}_{{ flow }}_{{ environment }}"), ["dev", "prod"]);
+    expect(fold(models).problems.map((problem) => problem.message)).toContain(
+      "The resource key <schema_bronze> in resources/schemas.yml would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.",
+    );
+  });
+
+  it("in two catalogs with the same name are keyed <catalog>_<schema>", () => {
+    const standard =
+      "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\nnaming: { catalog: '{{ environment }}_{{ flow }}' }\n";
+    const models = resolveAll({ ...files("{{ layer }}"), "standard.yaml": standard }, ["dev"]);
+    const schemas = yamlOf(databricks.build(models.dev!), "resources/schemas.yml").resources
+      .schemas;
+    expect(Object.keys(schemas)).toEqual(["dev_shop_bronze", "dev_web_bronze"]);
+  });
+});
