@@ -77,6 +77,11 @@ What `build` writes, which the folded bundle also follows:
   parameter `ingestron.<name>=<value>`. Built for one environment it has no
   parameters, so nothing is replaced.
 - **Grants** are in `prerequisites/<environment>.sql`.
+- **Platform fields.** The pack lists as `platformFields` the Platform settings
+  it reads that have a default other than empty: `mode`, `compute.serverless`,
+  `schedule.timezone`, `schedule.paused`, and the four `manage` settings
+  (`schemas`, `tags`, `comments`, `checks`). Definitions checks each against the
+  Platform's field reference, so tools can show them with their defaults.
 
 ## 3. Building environments together
 

@@ -62,6 +62,16 @@ export const databricks: Pack = {
   },
   connectors,
   capabilities,
+  platformFields: [
+    "mode",
+    "compute.serverless",
+    "schedule.timezone",
+    "schedule.paused",
+    "manage.schemas",
+    "manage.tags",
+    "manage.comments",
+    "manage.checks",
+  ],
   contract,
   check(model) {
     const problems: string[] = [];
