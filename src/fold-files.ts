@@ -8,6 +8,7 @@ import type { Plan } from "./fold-plan.js";
 import { codeProblem, differ, listOf } from "./fold-problems.js";
 import { pauseOf, targetSettings, type Targets } from "./fold-target.js";
 import { hasMarker, marker, markers, type Variable } from "./fold-values.js";
+import { configurationKey, pythonValues } from "./fold-python.js";
 import { mapStrings } from "./walk.js";
 
 /** The folded files, and each target's host when it is supplied when deploying. */
@@ -94,27 +95,48 @@ function foldCodeFile(
   origins: Record<string, string>,
 ): string {
   if (!hasMarker(text)) return text;
-  const folder = `src/${plan.template.names.pipeline}/`;
   const names = [...text.matchAll(markers)].map((match) => match[1]!);
-  const into =
-    path === scriptPath(plan.template.names.pipeline)
-      ? used.parameters
-      : path.startsWith(folder) && path.endsWith(".sql")
-        ? used.configuration
-        : undefined;
-  if (!into) {
+  const kind = kindOf(plan, path);
+  const folded = kind && foldedCode(plan, path, text, kind);
+  if (!kind || folded === undefined) {
     plan.problems.push(codeProblem(plan, path, names, origins[path] ?? "project.yaml"));
     return text;
   }
-  for (const name of names) into.add(name);
-  return text.replaceAll(markers, (_, name: string) => `\${ingestron.${name}}`);
+  for (const name of names) (kind === "script" ? used.parameters : used.configuration).add(name);
+  return folded;
+}
+
+/**
+ * SQL and the script take `${ingestron.<name>}`; a PySpark file reads spark.conf.get,
+ * except in the transform's own code. Undefined when the file cannot take the values.
+ */
+function foldedCode(plan: Plan, path: string, text: string, kind: string): string | undefined {
+  if (kind !== "python")
+    return text.replaceAll(markers, (_, name: string) => `\${${configurationKey(name)}}`);
+  return userCode(plan, path) ? undefined : pythonValues(text);
+}
+
+/** The after-refresh script, or a SQL or Python file of the pipeline that builds the tables. */
+function kindOf(plan: Plan, path: string): "script" | "sql" | "python" | undefined {
+  const { pipeline } = plan.template.names;
+  if (path === scriptPath(pipeline)) return "script";
+  if (!path.startsWith(`src/${pipeline}/`)) return undefined;
+  if (path.endsWith(".sql")) return "sql";
+  return path.endsWith(".py") ? "python" : undefined;
+}
+
+/** True when the values are in a PySpark transform's own code, which the pack copies as it is. */
+function userCode(plan: Plan, path: string): boolean {
+  const name = path.replace(/^.*\//, "").replace(/\.py$/, "");
+  const table = plan.template.tables.find((candidate) => candidate.name === name);
+  return hasMarker(table?.transform?.code ?? "");
 }
 
 function configure(file: YamlFile | string | undefined, pipeline: string, names: Set<string>) {
   if (!file || typeof file === "string" || names.size === 0) return;
   const pipelines = (file.data.resources as Data).pipelines as Record<string, Data>;
   const configuration = Object.fromEntries(
-    [...names].map((name) => [`ingestron.${name}`, marker(name)]),
+    [...names].map((name) => [configurationKey(name), marker(name)]),
   );
   pipelines[pipeline] = { ...pipelines[pipeline], configuration };
 }
@@ -123,7 +145,8 @@ function parameterise(job: Data | undefined, names: Set<string>) {
   if (!job || names.size === 0) return;
   for (const task of job.tasks as Data[]) {
     const python = task.spark_python_task as Data | undefined;
-    if (python) python.parameters = [...names].map((name) => `ingestron.${name}=${marker(name)}`);
+    if (python)
+      python.parameters = [...names].map((name) => `${configurationKey(name)}=${marker(name)}`);
   }
 }
 

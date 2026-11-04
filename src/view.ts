@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { splitDeployText, type ResolvedModel, type SuppliedValue } from "@ingestron/definitions";
 import { parse, stringify } from "yaml";
 import type { Data } from "./bundle.js";
+import { pythonWithValues } from "./fold-python.js";
 import { mapStrings } from "./walk.js";
 
 /** What the deploying pipeline supplies for one target, as the deploy-time values' text. */
@@ -46,7 +47,10 @@ export function sameFile(path: string, viewed: string, rendered: string): boolea
     : viewed === rendered;
 }
 
-/** Folder → `${key}` → value: what the pipelines' configuration and the job's parameters give the code. */
+/**
+ * Folder (ending in `/`) or file → key → value: what each pipeline's configuration gives
+ * the code under its folder, and what the job's parameters give its script.
+ */
 type Values = Record<string, Record<string, string>>;
 
 /** The folded files as Databricks deploys them for `target`, laid out as `build` lays out one target. */
@@ -157,7 +161,7 @@ function takeConfiguration(pipeline: Data, code: Values): void {
   const folder = `${String(pipeline.root_path ?? "").replace(/^\.\.\//, "")}/`;
   for (const [key, value] of Object.entries(configuration)) {
     if (!key.startsWith("ingestron.")) continue;
-    code[folder] = { ...code[folder], [`\${${key}}`]: value };
+    code[folder] = { ...code[folder], [key]: value };
     delete configuration[key];
   }
   if (Object.keys(configuration).length === 0) delete pipeline.configuration;
@@ -170,22 +174,25 @@ function takeParameters(task: Data, code: Values): void {
   const file = String(python.python_file).replace(/^\.\.\//, "");
   for (const parameter of parameters) {
     const [key, value] = parameter.split(/=(.*)/s) as [string, string];
-    code[file] = { ...code[file], [`\${${key}}`]: JSON.stringify(value).slice(1, -1) };
+    code[file] = { ...code[file], [key]: value };
   }
   delete python.parameters;
 }
 
 /** Pipeline SQL with its folder's configuration values; the script with its parameters. */
 function withValues(path: string, text: string, code: Values): string {
-  const applies = Object.entries(code).filter(([at]) =>
-    at.endsWith("/") ? path.startsWith(at) && path.endsWith(".sql") : path === at,
-  );
-  return applies.reduce(
-    (result, [, values]) =>
-      Object.entries(values).reduce(
-        (inner, [key, value]) => inner.replaceAll(key, () => value),
-        result,
-      ),
+  return Object.entries(code).reduce((result, [at, values]) => {
+    if (path === at) return replaced(result, values, (value) => JSON.stringify(value).slice(1, -1));
+    if (!at.endsWith("/") || !path.startsWith(at)) return result;
+    if (path.endsWith(".sql")) return replaced(result, values, (value) => value);
+    return path.endsWith(".py") ? pythonWithValues(result, values) : result;
+  }, text);
+}
+
+/** Each `${<key>}` in a text as its value, written as `write` gives it. */
+function replaced(text: string, values: Record<string, string>, write: (value: string) => string) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.replaceAll(`\${${key}}`, () => write(value)),
     text,
   );
 }

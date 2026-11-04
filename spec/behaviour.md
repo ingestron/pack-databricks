@@ -166,8 +166,14 @@ places where values differ in the order `compareTargets` gives them.
 - **In the after-refresh task** it becomes `${ingestron.<name>}`, and the
   job's `spark_python_task` gets the parameter `ingestron.<name>=${var.<name>}`
   (section 2).
-- **In a PySpark transform's file**, a variable is refused (section 5):
-  Python files take no bundle values yet.
+- **In a PySpark transform's file** (`src/<pipeline>/**/*.py`), a variable
+  inside a double-quoted text the pack writes, such as the table's `name` or an
+  input's name, is read with `spark.conf.get("ingestron.<name>")`, joined to the
+  rest of the text: `"⟦schema_silver⟧.totals"` becomes
+  `spark.conf.get("ingestron.schema_silver") + ".totals"`. The pipeline gets the
+  configuration `ingestron.<name>: ${var.<name>}`, as for SQL. A variable in
+  the transform's own code, which the pack copies as it is, is refused
+  (section 5).
 - **In a path or a YAML key**, a variable is refused (section 5): file names
   and resource keys must be the same in every target.
 
@@ -188,9 +194,11 @@ Each target, named after its environment, has:
   `UNPAUSED` when its mode is `development` and its schedule is not paused.
   Otherwise the mode gives the right state by itself: `development` pauses
   schedules, and an unset `pause_status` is `UNPAUSED`. A `PAUSED` preset also
-  stops every continuous pipeline, such as a gateway, so when a target would get
-  it and the bundle has a continuous pipeline, the job's `pause_status` is
-  `${var.pause_status}` instead, set to `PAUSED` or `UNPAUSED` in every target;
+  stops every continuous pipeline, such as a gateway, and an `UNPAUSED` preset in
+  a `development` target lets them run where the mode alone would stop them. So
+  when a target with a continuous pipeline would get either preset, the job's
+  `pause_status` is `${var.pause_status}` instead, set to `PAUSED` or
+  `UNPAUSED` in every target;
 - `variables`: every declared variable the target sets.
 
 The mode is the model's: with `environmentsTogether`, `development` for the
@@ -251,10 +259,16 @@ For a target `e`:
   - `e`'s presets applied to every job and pipeline: each preset tag the
     resource does not set; a schedule without `pause_status` gets the preset's,
     else `PAUSED` in `development` mode, else `UNPAUSED`; a `PAUSED` preset
-    removes `continuous` from every pipeline;
+    removes `continuous` from every pipeline. Development mode stops continuous
+    pipelines through its own default `PAUSED` preset, unless an `UNPAUSED`
+    preset replaces it, and no resource setting can say that: so in a
+    `development` target with an `UNPAUSED` preset and a continuous pipeline,
+    the view's target keeps `presets: { trigger_pause_status: UNPAUSED }`;
   - each pipeline's `ingestron.*` configuration replaces `${ingestron.<name>}`
-    in the SQL files under its `root_path`, and is then removed from the
-    pipeline; each `ingestron.*` task parameter replaces `${ingestron.<name>}`
+    in the SQL files under its `root_path`, and, in the Python files there, each
+    `spark.conf.get("ingestron.<name>")` by its value as a JSON text, joined with
+    the texts beside it that it was joined to with `+`; it is then removed from
+    the pipeline. Each `ingestron.*` task parameter replaces `${ingestron.<name>}`
     in its Python file, written as JSON writes the text inside a string, and is
     removed from the task;
   - only `prerequisites/e.sql`, with each `<value of NAME>` written
@@ -282,7 +296,7 @@ errors. With any of them, `files` and `deployValues` are empty. Besides the
 | `ENVIRONMENTS_DIFFER` | `The code of table "<table>" differs between <targets> in more than values.`                                                                                                                                                                                                                                                                                                                                                                                      | The table's file       |
 | `ENVIRONMENTS_DIFFER` | `The generated file <path> would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`                                                                                                                                                                                                                                                                                      | `project.yaml`         |
 | `ENVIRONMENTS_DIFFER` | `The resource key <key> in <path> would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`                                                                                                                                                                                                                                                                               | `project.yaml`         |
-| `ENVIRONMENTS_DIFFER` | `The Python file of table "<table>" would need values that differ between environments (<variables>); Python transforms cannot take them yet.`, hint `Make these values the same in every environment, or write the transform in SQL.`                                                                                                                                                                                                                            | The table's file       |
+| `ENVIRONMENTS_DIFFER` | `The code of PySpark transform "<table>" would need values that differ between environments (<variables>); a PySpark transform's own code cannot take them yet.`, hint `Make these values the same in every environment, or write the transform in SQL.`                                                                                                                                                                                                          | The table's file       |
 | `ENVIRONMENTS_DIFFER` | `<path> cannot be generated once for every environment: in <targets> it would not be what that environment gets on its own, because the environments differ there in more than values.`, when no value that is not text differs                                                                                                                                                                                                                                   | `project.yaml`         |
 | `ENVIRONMENTS_DIFFER` | `<path> cannot be generated once for every environment: in <targets> it would not be what that environment gets on its own, because a value that is not text differs between environments: <setting> is <value> in <targets>, <value> in <targets>.` (each such value, joined with `; `), hint `Make <settings> the same in every environment; only text values, such as names, paths and hosts, and lists can differ.` A value is written as JSON, or `not set`. | `project.yaml`         |
 | `DEPLOY_VALUE`        | `This value is "<text>" in <target> and "<text>" in <target>; a value supplied when deploying must be written the same way in every environment that supplies it.`                                                                                                                                                                                                                                                                                                | The value's first use  |
@@ -290,7 +304,7 @@ errors. With any of them, `files` and `deployValues` are empty. Besides the
 | `DEPLOY_VALUE`        | `This value is "<text>" in <target>, which does not have the form "<text>" of <target>, so ${envvar:<NAME>} cannot stand for part of it.`                                                                                                                                                                                                                                                                                                                         | The value's first use  |
 | `DEPLOY_VALUE`        | `${envvar:<NAME>} stands for one value in each environment, but <target> writes …`                                                                                                                                                                                                                                                                                                                                                                                | The value's first use  |
 | `DEPLOY_VALUE`        | `The workspace host in <target> holds ${envvar:<NAME>} within other text; Databricks takes a host supplied when deploying only as a whole, from DATABRICKS_HOST.`                                                                                                                                                                                                                                                                                                 | The value's first use  |
-| `DEPLOY_VALUE`        | `The Python file of table "<table>" would need ${envvar:<NAME>}, which is supplied when deploying; Python transforms cannot take values supplied when deploying yet.`                                                                                                                                                                                                                                                                                             | The value's first use  |
+| `DEPLOY_VALUE`        | `The code of PySpark transform "<table>" would need ${envvar:<NAME>}, which is supplied when deploying; a PySpark transform's own code cannot take it yet.`                                                                                                                                                                                                                                                                                                       | The value's first use  |
 
 In a path or a key, a variable is shown as `<name>`. Target lists are joined
 with `, `, the last two with `and`. A problem the same

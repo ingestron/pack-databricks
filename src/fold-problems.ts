@@ -90,8 +90,8 @@ export function continuousProblems(models: Models): EnvironmentsProblem[] {
 }
 
 /**
- * A table's Python file that would need values that differ between targets, or that are
- * supplied when deploying: Python files take no bundle values yet.
+ * A PySpark transform whose own code would need values that differ between targets, or
+ * that are supplied when deploying: the pack copies that code as it is.
  */
 export function codeProblem(
   fold: { variables: Variables; models: Models; targets: string[] },
@@ -104,12 +104,12 @@ export function codeProblem(
   const deploy = variables.find((variable) => variable.deploy);
   if (deploy)
     return deployProblem(
-      `The Python file of table "${table}" would need \${envvar:${deploy.deploy}}, which is supplied when deploying; Python transforms cannot take values supplied when deploying yet.`,
+      `The code of PySpark transform "${table}" would need \${envvar:${deploy.deploy}}, which is supplied when deploying; a PySpark transform's own code cannot take it yet.`,
       fold.models[[...deploy.supplied][0] ?? fold.targets[0]!],
       deploy.deploy!,
     );
   return differ(
-    `The Python file of table "${table}" would need values that differ between environments (${variables.map((variable) => variable.name).join(", ")}); Python transforms cannot take them yet.`,
+    `The code of PySpark transform "${table}" would need values that differ between environments (${variables.map((variable) => variable.name).join(", ")}); a PySpark transform's own code cannot take them yet.`,
     file,
     "Make these values the same in every environment, or write the transform in SQL.",
   );
