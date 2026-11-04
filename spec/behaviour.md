@@ -369,10 +369,18 @@ The pack's tests check, on synthetic projects:
 - the fold property (section 4) with the definitions package's `checkFold`, on
   one, two and three targets, including a value that differs in some targets
   only, a deploy-time value supplied in one target and literal in another, a
-  deploy-time value inside a longer text, values in a transform's code, the
-  after-refresh task, managed schemas, tags and the schedule's pause;
+  deploy-time value inside a longer text, values in a transform's SQL code, a
+  PySpark transform's names, the after-refresh task, managed schemas (one and
+  several per layer), tags and the schedule's pause;
+- that a deliberately wrong fold, with another environment's value or a preset
+  dropped, fails `checkFold`;
+- the view itself (section 4) on hand-written bundles, following the
+  Databricks CLI's presets and development mode at v1.23.0;
+- that no Python file but a pipeline's own transforms is under a pipeline's
+  library glob;
 - each problem of section 5 that a project can cause, and `ENVIRONMENTS_DIFFER`
   for a table in one environment only;
 - minimality: a value the same in every target stays literal;
-- the golden files in `test/golden` for a retail-shaped project with dev and
-  prod, and with dev, test and prod.
+- the golden files in `test/golden`: a retail-shaped project with dev and
+  prod, and with dev, test and prod, and a PySpark transform whose schemas
+  differ by environment.
