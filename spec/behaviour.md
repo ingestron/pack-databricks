@@ -59,9 +59,11 @@ What `build` writes, which the folded bundle also follows:
   the AUTO CDC changes table and a transform's `{{ tables.<input> }}`. The
   after-refresh task runs in a job, not a pipeline, so it names every table with
   three parts.
-- **Managed schemas** (`manage.schemas`) are keyed by their layer, such as
-  `bronze`, the same in every environment. A layer whose tables are in more than
-  one schema keys each schema `<catalog>_<schema>`.
+- **Managed schemas** (`manage.schemas`) are keyed so that the key is the same
+  in every environment where only the catalog differs: by their layer, such as
+  `bronze`, when the layer has one schema, else by the schema's name, such as
+  `bronze_shop`. When two catalogs hold a schema of the same name, or the key is
+  already taken, the key is `<catalog>_<schema>`.
 - **Tags.** The platform's `tags` are on every pipeline, the gateway included,
   and on the refresh job.
 - **The after-refresh task** is `tasks/<pipeline>/apply_contract.py`, which the
@@ -277,6 +279,7 @@ errors. With any of them, `files` and `deployValues` are empty. Besides the
 | `ENVIRONMENTS_DIFFER` | `The <pipeline or job> is named "<name>" in <target> and "<name>" in <target>; resource keys and folders are named after it, so it must be the same in every environment.`                                                                                                   | `project.yaml`         |
 | `ENVIRONMENTS_DIFFER` | `The code of table "<table>" differs between <targets> in more than values.`                                                                                                                                                                                                 | The table's file       |
 | `ENVIRONMENTS_DIFFER` | `The generated file <path> would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`                                                                                                 | `project.yaml`         |
+| `ENVIRONMENTS_DIFFER` | `The resource key <key> in <path> would be named after a value that differs between environments; names that decide files and resource keys must be the same in every environment.`                                                                                          | `project.yaml`         |
 | `ENVIRONMENTS_DIFFER` | `The Python file of table "<table>" would need values that differ between environments (<variables>); Python transforms cannot take them yet.`, hint `Make these values the same in every environment, or write the transform in SQL.`                                       | The table's file       |
 | `ENVIRONMENTS_DIFFER` | `<path> cannot be generated once for every environment: in <targets> it would not be what that environment gets on its own, because the environments differ there in more than values.`                                                                                      | `project.yaml`         |
 | `DEPLOY_VALUE`        | `This value is "<text>" in <target> and "<text>" in <target>; a value supplied when deploying must be written the same way in every environment that supplies it.`                                                                                                           | The value's first use  |
@@ -286,7 +289,8 @@ errors. With any of them, `files` and `deployValues` are empty. Besides the
 | `DEPLOY_VALUE`        | `The workspace host in <target> holds ${envvar:<NAME>} within other text; Databricks takes a host supplied when deploying only as a whole, from DATABRICKS_HOST.`                                                                                                            | The value's first use  |
 | `DEPLOY_VALUE`        | `The Python file of table "<table>" would need ${envvar:<NAME>}, which is supplied when deploying; Python transforms cannot take values supplied when deploying yet.`                                                                                                        | The value's first use  |
 
-Target lists are joined with `, `, the last two with `and`. A problem the same
+In a path or a key, a variable is shown as `<name>`. Target lists are joined
+with `, `, the last two with `and`. A problem the same
 as one already given is given once. The hint, where none is given, is the
 code's (definitions specification, section 2.1).
 
