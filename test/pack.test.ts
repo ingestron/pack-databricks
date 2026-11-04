@@ -6,7 +6,7 @@ import { databricks } from "../src/index.js";
 
 const base: Record<string, string> = {
   "project.yaml": "id: shop\nenvironments: { dev: {} }\nimports: ['*.yaml']\n",
-  "standard.yaml": "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@1]\n",
+  "standard.yaml": "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\n",
   "files.yaml":
     "apiVersion: ingestron.io/v1\nkind: Connection\nid: files\nconnector: files\nconnectivity: public\nsettings: { path: /Volumes/dev/landing/shop/ }\n",
   "flow.yaml":
@@ -113,7 +113,7 @@ describe("quality", () => {
 describe("materialised views", () => {
   it("reads files without STREAM when a flow stores into a view", () => {
     const sql = orders(generate(withStore("  uses: materialised-view")).files);
-    expect(sql).toContain("CREATE OR REFRESH MATERIALIZED VIEW `dev`.`bronze`.`orders`");
+    expect(sql).toContain("CREATE OR REFRESH MATERIALIZED VIEW `bronze`.`orders`");
     expect(sql).toContain("AS\nSELECT * FROM read_files(");
   });
 
@@ -138,16 +138,16 @@ describe("platform", () => {
     expect(files["databricks.yml"]).not.toContain("workspace:");
   });
 
-  it("creates managed schemas with grants and makes the pipeline wait for them", () => {
+  it("creates managed schemas, keyed by layer, with grants, and makes the pipeline wait for them", () => {
     const platform =
       "apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\nmanage: { schemas: true }\ngrants:\n  bronze: [{ principal: engineers, privileges: [USE_SCHEMA] }]\n";
     const { files } = generate({ "platform.yaml": platform });
     expect(files["resources/schemas.yml"]).toContain(
-      "dev_bronze:\n      catalog_name: dev\n      name: bronze",
+      "bronze:\n      catalog_name: dev\n      name: bronze",
     );
     expect(files["resources/schemas.yml"]).toContain("principal: engineers");
     expect(files["resources/shop.pipeline.yml"]).toContain(
-      "schema: ${resources.schemas.dev_bronze.name}",
+      "schema: ${resources.schemas.bronze.name}",
     );
   });
 
@@ -204,7 +204,7 @@ describe("columns the landed files carry beyond the contract", () => {
       memoryFiles({
         ...base,
         "standard.yaml":
-          "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@1, lander@1]\ningest: { settings: { land: { landing: 'abfss://landing@acct.dfs.core.windows.net/shop' } } }\n",
+          "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2, lander@2]\ningest: { settings: { land: { landing: 'abfss://landing@acct.dfs.core.windows.net/shop' } } }\n",
         "flow.yaml": base["flow.yaml"]!.replace(
           "source: files\n",
           "source: files\ningest: { uses: land }\n",

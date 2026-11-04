@@ -1,23 +1,39 @@
-// The bundle's YAML files, built as data and serialised (never templated),
-// with every value resolved: the bundle has no variables.
+// The bundle's YAML files, built as data and serialised (never templated).
+// Built for one environment, every value is resolved; fold.ts turns the
+// values that differ between environments into bundle variables.
 import type { ResolvedModel, ResolvedTable } from "@ingestron/definitions";
 import { stringify } from "yaml";
 
-type Data = Record<string, unknown>;
+/** A YAML document as data. */
+export type Data = Record<string, unknown>;
+
+/**
+ * Files in the bundle folder that are not deployed: the generation manifest, and the
+ * grants an administrator runs by hand.
+ */
+export const notDeployed = [".generated.json", "prerequisites/**"];
 
 /** `databricks.yml`: one target, named after the environment. */
 export function bundleFile(model: ResolvedModel): Data {
-  const { platform } = model;
-  const target: Data = { mode: platform.mode, default: true };
-  if (platform.workspace.host || platform.workspace.root_path)
-    target.workspace = { ...platform.workspace };
-  if (platform.run_as) target.run_as = platform.run_as;
-  if (platform.permissions.length > 0) target.permissions = platform.permissions;
   return {
     bundle: { name: model.project.id },
     include: ["resources/*.yml"],
-    targets: { [model.project.environment]: target },
+    sync: { exclude: notDeployed },
+    targets: { [model.project.environment]: { ...targetOf(model), default: true } },
   };
+}
+
+/** The settings Databricks takes per target: mode, workspace, run_as and permissions. */
+export function targetOf(model: ResolvedModel): Data {
+  const { platform } = model;
+  const target: Data = { mode: platform.mode };
+  const workspace = Object.fromEntries(
+    Object.entries(platform.workspace).filter(([, value]) => value),
+  );
+  if (Object.keys(workspace).length > 0) target.workspace = workspace;
+  if (platform.run_as) target.run_as = platform.run_as;
+  if (platform.permissions.length > 0) target.permissions = platform.permissions;
+  return target;
 }
 
 /** The pipeline that builds the tables with SQL files under `src/`. */
@@ -97,14 +113,24 @@ function jobTask(task: Task): Data {
   };
 }
 
-/** Bundle keys of the schemas this bundle manages, by `catalog.schema`. Empty unless `manage.schemas`. */
+/**
+ * Bundle keys of the schemas this bundle manages, by `catalog.schema`: the layer, the
+ * same in every environment, or `<catalog>_<schema>` for a layer with several schemas.
+ * Empty unless `manage.schemas`.
+ */
 export function schemaKeys(model: ResolvedModel): Map<string, string> {
   if (!model.platform.manage.schemas) return new Map();
-  const keys = model.tables.map(
-    ({ fullName }) =>
-      [`${fullName.catalog}.${fullName.schema}`, `${fullName.catalog}_${fullName.schema}`] as const,
+  const schemas = new Map<string, string>();
+  for (const { fullName, layer } of model.tables)
+    schemas.set(`${fullName.catalog}.${fullName.schema}`, layer);
+  const perLayer = new Map<string, number>();
+  for (const layer of schemas.values()) perLayer.set(layer, (perLayer.get(layer) ?? 0) + 1);
+  return new Map(
+    [...schemas].map(([name, layer]) => [
+      name,
+      perLayer.get(layer) === 1 ? layer : name.replace(".", "_"),
+    ]),
   );
-  return new Map(keys);
 }
 
 /** A schema's name, or a reference to it when the bundle manages it, so the bundle creates it first. */
@@ -140,12 +166,18 @@ function uniqueSchemas(tables: ResolvedTable[]): ResolvedTable[] {
   });
 }
 
-/** Tags and failure notifications, the same on every pipeline. */
+/** The platform's tags, on every pipeline and job. */
+export function pipelineTags(model: ResolvedModel): Data {
+  const { tags } = model.platform;
+  return Object.keys(tags).length > 0 ? { tags } : {};
+}
+
+/** Tags and failure notifications, the same on every pipeline that builds tables. */
 export function pipelineExtras(model: ResolvedModel): Data {
   const { platform } = model;
   const alerts = ["on-update-failure", "on-update-fatal-failure", "on-flow-failure"];
   return {
-    ...(Object.keys(platform.tags).length > 0 && { tags: platform.tags }),
+    ...pipelineTags(model),
     ...(platform.notifications.on_failure.length > 0 && {
       notifications: [{ email_recipients: platform.notifications.on_failure, alerts }],
     }),

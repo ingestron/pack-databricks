@@ -1,0 +1,15 @@
+# How the organisation builds data products. Shared by every project.
+apiVersion: ingestron.io/v1
+kind: Standard
+id: acme
+packs: [databricks@2]
+naming:
+  catalog: "{{ environment }}_sales"
+quality:
+  required: drop
+store:
+  settings:
+    streaming-table:
+      properties: { delta.enableChangeDataFeed: "true" }
+  fixed:
+    streaming-table: { cluster_by: auto }

@@ -5,7 +5,7 @@ import type { ResolvedTable } from "@ingestron/definitions";
 import { Liquid } from "liquidjs";
 import { renderQuery } from "./query.js";
 import { pythonData } from "./python-data.js";
-import { changeData, sourceData, tableData } from "./sql-data.js";
+import { changeData, localText, sourceData, tableData } from "./sql-data.js";
 
 /** The templates folder, also used by the template parity check. */
 export const templatesFolder = join(dirname(fileURLToPath(import.meta.url)), "../templates/");
@@ -22,11 +22,6 @@ export interface SqlFile {
   template: string;
   data: object;
   extension: "sql" | "py";
-}
-
-/** The SQL or Python file for one table; `header` is its first comment line. */
-export function tableSql(table: ResolvedTable, header: string): string {
-  return renderSql(sqlFile(table, header));
 }
 
 /** Renders a file chosen by `sqlFile`. */
@@ -51,39 +46,45 @@ export function renderApply(data: {
   });
 }
 
-/** Chooses the template by transform and store method, and builds its data. */
-export function sqlFile(table: ResolvedTable, header: string): SqlFile {
+/**
+ * Chooses the template by transform and store method, and builds its data. `catalog`
+ * is the pipeline's catalog, whose tables the code names with two parts.
+ */
+export function sqlFile(table: ResolvedTable, header: string, catalog: string): SqlFile {
   if (table.transform?.method === "pyspark") {
     return {
       template: "materialised-view.py.liquid",
-      data: pythonData(table, header),
+      data: pythonData(table, header, catalog),
       extension: "py",
     };
   }
   const store = table.store?.method;
-  if (store === "streaming-table") return streamingTable(table, header);
-  if (store === "materialised-view") return materialisedView(table, header);
+  if (store === "streaming-table") return streamingTable(table, header, catalog);
+  if (store === "materialised-view") return materialisedView(table, header, catalog);
   throw new Error(`No SQL for store method "${String(store)}" (table ${table.name}).`);
 }
 
-function streamingTable(table: ResolvedTable, header: string): SqlFile {
+function streamingTable(table: ResolvedTable, header: string, catalog: string): SqlFile {
   const data = {
     header,
-    table: tableData(table, "STREAMING TABLE"),
+    table: tableData(table, "STREAMING TABLE", catalog),
     source: sourceData(table, true),
   };
   if (table.store?.settings.mode === "append")
     return { template: "streaming-table.sql.liquid", data, extension: "sql" };
   return {
     template: "change-data.sql.liquid",
-    data: { ...data, cdc: changeData(table) },
+    data: { ...data, cdc: changeData(table, catalog) },
     extension: "sql",
   };
 }
 
-function materialisedView(table: ResolvedTable, header: string): SqlFile {
+function materialisedView(table: ResolvedTable, header: string, catalog: string): SqlFile {
+  const inputs = Object.entries(table.transform?.inputs ?? {}).map(
+    ([name, full]) => [name, localText(full, catalog)] as const,
+  );
   const rendered = table.transform
-    ? renderQuery(table.transform.code, table.transform.inputs)
+    ? renderQuery(table.transform.code, Object.fromEntries(inputs))
     : { sql: "" };
   // The sql method's check has already reported SQL that cannot be rendered.
   const query = "sql" in rendered ? rendered.sql : "";
@@ -92,7 +93,7 @@ function materialisedView(table: ResolvedTable, header: string): SqlFile {
     : { stream: false, select: "*", path: "", options: [] };
   return {
     template: "materialised-view.sql.liquid",
-    data: { header, table: tableData(table, "MATERIALIZED VIEW"), source, query },
+    data: { header, table: tableData(table, "MATERIALIZED VIEW", catalog), source, query },
     extension: "sql",
   };
 }

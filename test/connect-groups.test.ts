@@ -28,7 +28,7 @@ describe("schemas the bundle manages", () => {
     const platform =
       "apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\nmanage: { schemas: true }\n";
     const { yaml } = generate({ ...two(), "platform.yaml": platform });
-    const schema = "${resources.schemas.dev_bronze.name}";
+    const schema = "${resources.schemas.bronze.name}";
     const gateway = yaml("resources/shop_erp_gateway.pipeline.yml").resources.pipelines
       .shop_erp_gateway;
     expect(gateway.schema).toBe(schema);

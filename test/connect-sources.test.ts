@@ -122,7 +122,7 @@ describe("together with our own pipeline", () => {
       "totals.yaml": contract("totals"),
       "platform.yaml": platform,
     });
-    expect(output["src/shop/silver/totals.sql"]).toContain("FROM `dev`.`bronze`.`orders`");
+    expect(output["src/shop/silver/totals.sql"]).toContain("FROM `bronze`.`orders`");
     expect(yaml("resources/shop_refresh.job.yml").resources.jobs.shop_refresh.tasks).toEqual([
       {
         task_key: "ingest_erp",

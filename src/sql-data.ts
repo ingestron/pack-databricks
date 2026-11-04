@@ -1,7 +1,7 @@
 // Template data for a table's SQL file. All quoting happens here, so the
 // templates only arrange text. Key names avoid Liquid keywords (such as
 // `required` or `with`) because python-liquid refuses them after a dot.
-import { fullNameText, type Column, type ResolvedTable } from "@ingestron/definitions";
+import type { Column, FullName, ResolvedTable } from "@ingestron/definitions";
 import { quoteName } from "./query.js";
 
 /** The table definition shared by every SQL file. */
@@ -30,12 +30,31 @@ export function sqlString(text: string): string {
   return `'${text.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
 }
 
-/** The definition of the table itself. */
-export function tableData(table: ResolvedTable, kind: TableData["kind"]): TableData {
+/**
+ * A table's name in a pipeline's code: `schema.table` when the pipeline's own
+ * catalog holds it, as the pipeline reads names in its catalog; else all three parts.
+ */
+export function localName(name: FullName, catalog: string): string {
+  return name.catalog === catalog
+    ? `${name.schema}.${name.table}`
+    : `${name.catalog}.${name.schema}.${name.table}`;
+}
+
+/** A full name written `catalog.schema.table`, as transform inputs are, in a pipeline's code. */
+export function localText(fullName: string, catalog: string): string {
+  return fullName.startsWith(`${catalog}.`) ? fullName.slice(catalog.length + 1) : fullName;
+}
+
+/** The definition of the table itself, in the pipeline whose catalog is `catalog`. */
+export function tableData(
+  table: ResolvedTable,
+  kind: TableData["kind"],
+  catalog: string,
+): TableData {
   const settings = table.store?.settings ?? {};
   return {
     kind,
-    target: quoteName(fullNameText(table.fullName)),
+    target: quoteName(localName(table.fullName, catalog)),
     constraints: table.expectations.map((item) => ({
       name: quoteName(item.name),
       check: item.check,
@@ -139,8 +158,8 @@ function optionsOf(table: ResolvedTable): SourceData["options"] {
   return options;
 }
 
-/** The AUTO CDC parts of a change-data table. */
-export function changeData(table: ResolvedTable) {
+/** The AUTO CDC parts of a change-data table, in the pipeline whose catalog is `catalog`. */
+export function changeData(table: ResolvedTable, catalog: string) {
   const settings = table.store?.settings ?? {};
   const changes = {
     ...table.fullName,
@@ -148,7 +167,7 @@ export function changeData(table: ResolvedTable) {
   };
   const except = (settings.except_columns ?? []) as string[];
   return {
-    changes: quoteName(fullNameText(changes)),
+    changes: quoteName(localName(changes, catalog)),
     flow: quoteName(`${table.fullName.table}_cdc`),
     keys: table.contract.primaryKey.map(quoteName).join(", "),
     sequence: quoteName(String(settings.sequence_by)),

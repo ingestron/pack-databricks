@@ -1,0 +1,12 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: shop.customers
+version: 1.0.0
+status: active
+schema:
+  - name: customers
+    logicalType: object
+    description: Web shop customers.
+    properties:
+      - { name: id, logicalType: integer, required: true, primaryKey: true }
+      - { name: email, logicalType: string, required: true }
