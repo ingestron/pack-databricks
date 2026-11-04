@@ -128,7 +128,7 @@ its value in every target, and one that changes no file is harmless.
 
 Every variable is declared once in `databricks.yml` with a `description` and
 no `default`, so that no target can take another environment's value. Each
-target sets every variable in its `variables`, except one the deploying pipeline
+target sets every variable in its `variables`, except one the deploying CI pipeline
 supplies (section 3.5). Two places whose values are the same in every target
 share one variable.
 
@@ -203,7 +203,8 @@ Each target, named after its environment, has:
 
 The mode is the model's: with `environmentsTogether`, `development` for the
 environment named `dev` and `production` for every other environment, unless
-the platform sets `mode`.
+the platform sets `mode`. Section 6 says what that changes for an environment
+that `databricks@1` deployed in `development` mode.
 
 ### 3.5 Deploy-time values
 
@@ -211,7 +212,7 @@ A deploy-time value `${envvar:NAME}` (definitions specification, section 1.1)
 is a bundle variable named NAME in lower case, with `_` for other characters,
 described `Supplied when deploying, as BUNDLE_VAR_<name> (<NAME> in the definitions).`
 A target in which the value is supplied leaves the variable unset, and the
-deploying pipeline supplies it as the environment variable `BUNDLE_VAR_<name>`.
+deploying CI pipeline supplies it as the environment variable `BUNDLE_VAR_<name>`.
 The files never hold the text `${envvar:NAME}`.
 
 - **The same in every target.** Each deploy-time value in the text becomes its
@@ -230,7 +231,7 @@ The files never hold the text `${envvar:NAME}`.
   each target: a target cannot supply it in one place and set it in another, nor
   set it to two different texts.
 - **The workspace host** cannot be a bundle variable, so a target whose host is
-  a deploy-time value leaves `workspace.host` out, and the pipeline supplies the
+  a deploy-time value leaves `workspace.host` out, and the CI pipeline supplies the
   host as `DATABRICKS_HOST`. A host with a deploy-time value inside a longer text
   is refused.
 - **Grants files** are run by hand, so `prerequisites/<environment>.sql` writes
@@ -317,13 +318,49 @@ The bundle's `name` (the project id), the resource keys of pipelines and jobs,
 the target names (the environment names) and each target's `root_path` are what
 `databricks@1` wrote for each environment's own bundle. So the first
 `databricks bundle deploy -t <environment>` of a `databricks@2` bundle reuses
-that environment's deployment state and updates its resources in place.
+that environment's deployment state, and for `dev` and `prod` updates its
+resources in place. There are two exceptions.
 
-Managed schemas are the exception: `databricks@1` keyed them
-`<catalog>_<schema>`, which differs between environments, and `databricks@2`
-keys them by layer (section 2). A project with `manage.schemas` binds each
-existing schema to its new key with `databricks bundle deployment bind` before
-the first deploy.
+**Managed schemas.** `databricks@1` keyed them `<catalog>_<schema>`, which
+differs between environments; `databricks@2` keys them as section 2 says. Each
+environment's deployment state still holds the old key, which is no longer in
+the configuration, so the next deploy would delete the schema under that key:
+the Databricks CLI asks for approval before deleting a Unity Catalog schema,
+which fails in CI, and with `--auto-approve` it deletes the schema. So for each
+environment, and each managed schema, before the first `databricks@2` deploy:
+
+1. In the `databricks@1` folder (`build/<environment>/`), run
+   `databricks bundle deployment unbind <catalog>_<schema> -t <environment>`.
+   `unbind` finds the key in the configuration it is run with, so it must run
+   against the `databricks@1` bundle.
+2. In `build/databricks/`, run
+   `databricks bundle deployment bind <key> <catalog>.<schema> -t <environment>`,
+   where `<key>` is the schema's key in `resources/schemas.yml`.
+3. Run `databricks bundle validate -t <environment>` and
+   `databricks bundle summary -t <environment>`, and confirm that the deploy
+   plans no schema deletion.
+
+**Environments other than `dev` and `prod`.** With `databricks@1`, an
+environment not named `prod` or `production`, such as `test`, `uat` or
+`staging`, was in `development` mode unless the platform set `mode`. With
+`databricks@2` it is in `production` mode (section 3.4). On its first deploy:
+
+- resource names lose the `[dev <identity>]` prefix, so jobs and pipelines are
+  renamed;
+- pipelines get `development: false`;
+- a managed schema, which development mode named `dev_<identity>_<schema>`,
+  becomes `<schema>`: the deploy plans to delete the old schema, with the same
+  approval as above, and the pipelines write to the new one;
+- the deployment lock is on, and schedules are no longer paused by the mode
+  (a paused schedule gets the `PAUSED` preset instead);
+- production mode checks the deploying identity: without a service principal
+  in `run_as`, `run_as` and `permissions` must be set, and `root_path` must not
+  be a user's folder.
+
+To keep `development` mode for such an environment, set it in the platform
+per environment, for example `mode: ${values.mode}` in the platform and
+`values: { mode: development }` for that environment in project.yaml (with
+`mode: production` in the top-level `values`).
 
 ## 7. Conformance
 
