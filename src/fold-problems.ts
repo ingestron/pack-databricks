@@ -2,9 +2,7 @@
 // than a comparison of values (spec/behaviour.md, section 5).
 import type { EnvironmentsProblem, ResolvedModel } from "@ingestron/definitions";
 import { connectGroups } from "./connect.js";
-import { deployProblem, type Variables } from "./fold-values.js";
-
-type Models = Readonly<Record<string, ResolvedModel>>;
+import { deployProblem, type Models, type Variables } from "./fold-values.js";
 
 /** An `ENVIRONMENTS_DIFFER` error at a definition. */
 export function differ(message: string, file: string, hint?: string): EnvironmentsProblem {

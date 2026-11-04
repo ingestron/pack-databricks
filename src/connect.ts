@@ -42,6 +42,11 @@ export function connectGroups(model: ResolvedModel): ConnectGroup[] {
   return [...groups.values()];
 }
 
+/** True when the bundle has a pipeline that runs continuously: a gateway, or Kafka read continuously. */
+export function hasContinuous(model: ResolvedModel): boolean {
+  return connectGroups(model).some((group) => group.gateway !== undefined || group.continuous);
+}
+
 /**
  * Problems with settings that one connection's tables share: its gateway, or
  * whether its ingestion runs continuously.

@@ -34,7 +34,7 @@ describe("values that differ", () => {
     expect(problems).toEqual([]);
     expect(bundle.variables).toEqual({
       catalog: { description: "Catalog of the shop tables." },
-      files_path: { description: "Folder the files files are read from (connection files)." },
+      files_path: { description: 'Folder the files of connection "files" are read from.' },
     });
     expect(bundle.targets.dev.variables).toEqual({
       catalog: "dev",

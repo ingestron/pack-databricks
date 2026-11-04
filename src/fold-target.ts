@@ -3,6 +3,8 @@
 // presets for the tags and schedule pause that differ (spec/behaviour.md, 2.3).
 import { splitDeployText, type ResolvedModel } from "@ingestron/definitions";
 import { targetOf, type Data } from "./bundle.js";
+import { hasContinuous } from "./connect.js";
+import { mapStrings } from "./walk.js";
 import type { Plan } from "./fold-plan.js";
 import {
   deployProblem,
@@ -68,13 +70,7 @@ function hostOf(plan: Plan, target: string, settings: Data): string | undefined 
 
 /** Each deploy-time value in a target's own settings becomes its variable, which the target leaves unset. */
 function withVariables(plan: Plan, target: string, node: unknown): unknown {
-  const model = plan.models[target]!;
-  if (typeof node === "string") return replaced(plan, target, model, node);
-  if (Array.isArray(node)) return node.map((item) => withVariables(plan, target, item));
-  if (node === null || typeof node !== "object") return node;
-  return Object.fromEntries(
-    Object.entries(node).map(([key, value]) => [key, withVariables(plan, target, value)]),
-  );
+  return mapStrings(node, (text) => replaced(plan, target, plan.models[target]!, text));
 }
 
 function replaced(plan: Plan, target: string, model: ResolvedModel, text: string): string {
@@ -96,10 +92,12 @@ export type Pause =
 
 /**
  * When the schedule's pause differs: a preset only where the target's mode does not
- * pause it by itself, or a variable when a PAUSED preset would also stop a continuous
- * pipeline (Databricks sets `continuous: false` on every pipeline under that preset).
+ * pause it by itself, or a variable when a preset would also change a continuous
+ * pipeline. Databricks sets `continuous: false` on every pipeline under a PAUSED
+ * preset, and development mode does the same unless an UNPAUSED preset replaces its
+ * own PAUSED one.
  */
-export function pauseOf(plan: Plan, continuous: boolean): Pause {
+export function pauseOf(plan: Plan): Pause {
   const schedules = plan.targets.map((target) => plan.models[target]!.platform.schedule);
   if (schedules.some((schedule) => !schedule)) return { kind: "same" };
   if (new Set(schedules.map((schedule) => schedule!.paused)).size === 1) return { kind: "same" };
@@ -109,7 +107,7 @@ export function pauseOf(plan: Plan, continuous: boolean): Pause {
     if (mode === "production" && schedule!.paused) presets[target] = "PAUSED";
     if (mode === "development" && !schedule!.paused) presets[target] = "UNPAUSED";
   }
-  if (!continuous || !Object.values(presets).includes("PAUSED"))
+  if (!Object.keys(presets).some((target) => hasContinuous(plan.models[target]!)))
     return { kind: "presets", presets };
   const values = Object.fromEntries(
     plan.targets.map((target) => [

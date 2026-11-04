@@ -53,11 +53,11 @@ function tablePlace(model: ResolvedModel, index: number, rest: string[], pipelin
   if (part === "ingest" && key === "connection" && more[0] === "settings") {
     const id = table.ingest!.connection.id;
     const setting = more.slice(1);
-    const what =
+    const description =
       setting.join(".") === "path"
-        ? `Folder the ${id} files are read from`
-        : `Setting ${setting.join(".")} of the ${id} connection`;
-    return { name: variableName(id, ...setting), description: `${what} (connection ${id}).` };
+        ? `Folder the files of connection "${id}" are read from.`
+        : `Setting ${setting.join(".")} of connection "${id}".`;
+    return { name: variableName(id, ...setting), description };
   }
   if (key === "settings" && (more[0] === "landing" || more[0] === "published") && more.length === 1)
     return { name: more[0], description: folderOf(more[0], part!) };
