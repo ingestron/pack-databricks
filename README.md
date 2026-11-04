@@ -162,7 +162,7 @@ sources, so that only the refresh job runs it.
   A PySpark transform reads names that differ from the pipeline's
   configuration with `spark.conf.get("ingestron.<name>")`, into a module-level
   constant for its decorator; values in its own code cannot differ yet.
-- Needs `@ingestron/definitions` 1.8 or later, and Databricks CLI v0.264.0 or
+- Needs `@ingestron/definitions` 1.9 or later, and Databricks CLI v0.264.0 or
   later, which adds preset tags to pipelines.
 
 The rules are in [spec/behaviour.md](spec/behaviour.md).
