@@ -168,7 +168,7 @@ describe("the after-refresh script", () => {
       "apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\nmanage: { tags: true }\n";
     const models = resolveAll(shop(two, { "platform.yaml": platform }), ["dev", "prod"]);
     const { files } = fold(models);
-    expect(files["src/shop/apply_contract.py"]).toContain(
+    expect(files["tasks/shop/apply_contract.py"]).toContain(
       "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders` SET TAGS ('sales' = '')",
     );
     const job = yamlOf(files, "resources/shop_refresh.job.yml").resources.jobs.shop_refresh;

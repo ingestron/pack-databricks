@@ -26,7 +26,7 @@ with a target per environment, which a tool writes to one folder (the CLI writes
 | `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                |
 | `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                            |
 | `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                     |
-| `src/<pipeline>/apply_contract.py`   | The after-refresh task: tags, column comments and table checks, when any is on    |
+| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments and table checks, when any is on    |
 | `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it |
 
 `<pipeline>` and `<job>` are the model's `names.pipeline` and `names.job`;
@@ -62,7 +62,13 @@ What `build` writes, which the folded bundle also follows:
   one schema keys each schema `<catalog>_<schema>`.
 - **Tags.** The platform's `tags` are on every pipeline, the gateway included,
   and on the refresh job.
-- **The after-refresh task** (`apply_contract.py`) replaces each
+- **The after-refresh task** is `tasks/<pipeline>/apply_contract.py`, which the
+  refresh job runs as `../tasks/<pipeline>/apply_contract.py`. It is outside
+  `src/`: a pipeline loads every Python and SQL file its library glob
+  `../src/<pipeline>/**` matches as its own code, and this script must run only
+  in the job, after the refresh. The bundle deploys it, as it deploys every file
+  that `sync` does not exclude. No Python file but a pipeline's own transforms
+  is under a pipeline's glob, whatever the naming standard. The task replaces each
   `${ingestron.<name>}` in its statements and checks with the value of a task
   parameter `ingestron.<name>=<value>`. Built for one environment it has no
   parameters, so nothing is replaced.

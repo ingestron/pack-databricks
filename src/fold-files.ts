@@ -2,7 +2,7 @@
 // bundle, then each marker made a bundle variable in YAML, a pipeline
 // configuration value in SQL, or a task parameter of the after-refresh script.
 import type { Data } from "./bundle.js";
-import { bundleData, headerOf, written, type YamlFile } from "./build.js";
+import { bundleData, headerOf, scriptPath, written, type YamlFile } from "./build.js";
 import { prerequisites } from "./capabilities.js";
 import type { Plan } from "./fold-plan.js";
 import { codeProblem, differ, listOf } from "./fold-problems.js";
@@ -80,7 +80,7 @@ function foldCodeFile(
   const folder = `src/${plan.template.names.pipeline}/`;
   const names = [...text.matchAll(markers)].map((match) => match[1]!);
   const into =
-    path === `${folder}apply_contract.py`
+    path === scriptPath(plan.template.names.pipeline)
       ? used.parameters
       : path.startsWith(folder) && path.endsWith(".sql")
         ? used.configuration

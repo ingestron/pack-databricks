@@ -3,6 +3,7 @@
 import { memoryFiles } from "@ingestron/config";
 import { resolveDefinitions } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import { databricks } from "../src/index.js";
 
 const contract = [
@@ -49,7 +50,7 @@ function generate(manage: string, more = "") {
   return { result, out: result.model ? databricks.build(result.model) : {} };
 }
 
-const script = "src/shop/apply_contract.py";
+const script = "tasks/shop/apply_contract.py";
 const job = "resources/shop_refresh.job.yml";
 
 describe("after each refresh", () => {
@@ -98,7 +99,7 @@ describe("after each refresh", () => {
     const text = generate("{ tags: true }").out[job] ?? "";
     expect(text).toContain("task_key: apply_contract");
     expect(text).toContain("depends_on:\n            - task_key: refresh");
-    expect(text).toContain("python_file: ../src/shop/apply_contract.py");
+    expect(text).toContain("python_file: ../tasks/shop/apply_contract.py");
     expect(text).toContain("environment_key: ingestron");
     expect(text).toContain('environment_version: "6"');
     expect(text).not.toContain("schedule:");
@@ -146,3 +147,56 @@ describe("capabilities", () => {
     expect(result.diagnostics.map((item) => item.code)).toContain("CAPABILITY_OFF");
   });
 });
+
+describe("pipeline sources", () => {
+  /** A pipeline's library glob, relative to resources/, as a pattern over the bundle's paths. */
+  const pattern = (glob: string) =>
+    new RegExp(
+      `^${glob
+        .replace(/^\.\.\//, "")
+        .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+        .replaceAll("**", "\0")
+        .replaceAll("*", "[^/]*")
+        .replaceAll("\0", ".*")}$`,
+    );
+
+  it("hold no Python file but the pipeline's own transforms", () => {
+    const transform = [
+      "apiVersion: ingestron.io/v1",
+      "kind: Transform",
+      "id: totals",
+      "inputs: [orders]",
+      "contract: orders",
+      "transform: { uses: pyspark }",
+      "code: |",
+      "  def transform(tables):",
+      '      return tables["orders"]',
+      "",
+    ].join("\n");
+    const result = resolveDefinitions(
+      memoryFiles({
+        ...files,
+        "platform.yaml": platform("{ tags: true, comments: true, checks: true }"),
+        "totals.yaml": transform,
+      }),
+      { packs: [databricks], environment: "dev" },
+    );
+    const out = databricks.build(result.model!);
+    const globs = Object.entries(out)
+      .filter(([path]) => path.endsWith(".pipeline.yml"))
+      .flatMap(([, text]) =>
+        Object.values(parse(text).resources.pipelines as Record<string, Pipeline>).flatMap(
+          (pipeline) => (pipeline.libraries ?? []).map((library) => pattern(library.glob.include)),
+        ),
+      );
+    const loaded = Object.keys(out).filter(
+      (path) => path.endsWith(".py") && globs.some((glob) => glob.test(path)),
+    );
+    expect(Object.keys(out)).toContain(script);
+    expect(loaded).toEqual(["src/shop/silver/totals.py"]);
+  });
+});
+
+interface Pipeline {
+  libraries?: { glob: { include: string } }[];
+}
