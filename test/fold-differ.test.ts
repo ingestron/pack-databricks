@@ -26,15 +26,21 @@ describe("ENVIRONMENTS_DIFFER", () => {
     ]);
   });
 
-  it("refuses a difference that changes more than values, found against each target's own bundle", () => {
+  it("refuses a value that is not text and differs, naming it and its value in each environment", () => {
     const platform = (on: boolean) =>
       `apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\nmanage: { schemas: ${on} }\n`;
     const { dev } = resolveAll(shop(two, { "platform.yaml": platform(false) }), ["dev"]);
     const { prod } = resolveAll(shop(two, { "platform.yaml": platform(true) }), ["prod"]);
-    const { problems } = fold({ dev: dev!, prod: prod! });
-    expect(problems.map((problem) => problem.message)).toContain(
-      "resources/schemas.yml cannot be generated once for every environment: in prod it would not be what that environment gets on its own, because the environments differ there in more than values.",
-    );
+    const { files, problems } = fold({ dev: dev!, prod: prod! });
+    expect(files).toEqual({});
+    expect(problems).toContainEqual({
+      code: "ENVIRONMENTS_DIFFER",
+      severity: "error",
+      message:
+        "resources/schemas.yml cannot be generated once for every environment: in prod it would not be what that environment gets on its own, because a value that is not text differs between environments: platform setting manage.schemas is false in dev, true in prod.",
+      hint: "Make platform setting manage.schemas the same in every environment; only text values, such as names, paths and hosts, and lists can differ.",
+      file: "project.yaml",
+    });
   });
 
   it("refuses a Kafka connection read continuously in one environment only", () => {

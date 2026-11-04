@@ -1,6 +1,7 @@
 // The problems a fold reports, and the checks on the targets that need more
 // than a comparison of values (spec/behaviour.md, section 5).
-import type { EnvironmentsProblem, ResolvedModel } from "@ingestron/definitions";
+import type { EnvironmentsProblem, ResolvedModel, TargetDifference } from "@ingestron/definitions";
+import { placeOf } from "./fold-names.js";
 import { connectGroups } from "./connect.js";
 import { deployProblem, type Models, type Variables } from "./fold-values.js";
 
@@ -112,4 +113,49 @@ export function codeProblem(
     file,
     "Make these values the same in every environment, or write the transform in SQL.",
   );
+}
+
+/**
+ * A file whose view in some targets is not that target's own file. When values that are
+ * not text differ, the message names each, with its value in every target.
+ */
+export function unlikeProblem(
+  models: Models,
+  path: string,
+  targets: string[],
+  unfolded: TargetDifference[],
+): EnvironmentsProblem {
+  const start = `${path} cannot be generated once for every environment: in ${listOf(targets)} it would not be what that environment gets on its own`;
+  if (unfolded.length === 0)
+    return differ(
+      `${start}, because the environments differ there in more than values.`,
+      "project.yaml",
+    );
+  const first = Object.values(models)[0]!;
+  const settings = unfolded.map((difference) => settingOf(difference.pointer, first));
+  const values = unfolded.map(
+    (difference, index) => `${settings[index]} is ${valuesOf(models, difference.values)}`,
+  );
+  return differ(
+    `${start}, because a value that is not text differs between environments: ${values.join("; ")}.`,
+    "project.yaml",
+    `Make ${listOf(settings)} the same in every environment; only text values, such as names, paths and hosts, and lists can differ.`,
+  );
+}
+
+/** What a place in the model is, in words, such as "platform setting manage.schemas". */
+function settingOf(pointer: string, model: ResolvedModel): string {
+  const { description } = placeOf(pointer, model, false);
+  return `${description.charAt(0).toLowerCase()}${description.slice(1)}`.replace(/\.$/, "");
+}
+
+/** Each value with the targets that have it, such as "false in dev, true in test and prod". */
+function valuesOf(models: Models, values: Record<string, unknown>): string {
+  const groups = new Map<string, string[]>();
+  for (const target of Object.keys(models)) {
+    const value = values[target];
+    const text = value === undefined ? "not set" : JSON.stringify(value);
+    groups.set(text, [...(groups.get(text) ?? []), target]);
+  }
+  return [...groups].map(([value, targets]) => `${value} in ${listOf(targets)}`).join(", ");
 }
