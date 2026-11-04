@@ -3,6 +3,7 @@ import { contract } from "./contract.js";
 import type { Pack } from "@ingestron/definitions";
 import { connectors } from "./connectors.js";
 import { build } from "./build.js";
+import { buildEnvironments } from "./fold.js";
 import { request } from "./request.js";
 import { capabilities, tagProblems } from "./capabilities.js";
 import { lakeflowConnect } from "./connect-method.js";
@@ -11,14 +12,15 @@ import { files, materialisedView, sql, streamingTable } from "./methods.js";
 import { pyspark } from "./pyspark-method.js";
 
 /**
- * The Databricks pack, version 1. Name it in a standard as `pack: databricks@1`.
+ * The Databricks pack, version 2. Name it in a standard as `packs: [databricks@2]`. It
+ * builds every environment into one bundle, with a target per environment.
  * @example
- * const result = loadDefinitions("definitions", { pack: databricks, environment: "dev" });
+ * const result = loadDefinitions("definitions", { packs: [databricks], environment: "dev" });
  * if (result.model) console.log(Object.keys(databricks.build(result.model)));
  */
 export const databricks: Pack = {
   id: "databricks",
-  version: 1,
+  version: 2,
   defaults: {
     naming: {
       catalog: "{{ environment }}",
@@ -70,5 +72,6 @@ export const databricks: Pack = {
     return [...problems, ...tagProblems(model), ...sharedProblems(connectGroups(model))];
   },
   build,
+  buildEnvironments,
   request,
 };

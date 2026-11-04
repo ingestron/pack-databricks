@@ -30,7 +30,7 @@ const contract = [
 
 const files: Record<string, string> = {
   "project.yaml": "id: shop\nenvironments: { dev: {} }\nimports: ['*.yaml']\n",
-  "standard.yaml": "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@1]\n",
+  "standard.yaml": "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\n",
   "files.yaml":
     "apiVersion: ingestron.io/v1\nkind: Connection\nid: files\nconnector: files\nconnectivity: public\nsettings: { path: /Volumes/dev/landing/shop/ }\n",
   "flow.yaml":
@@ -57,7 +57,7 @@ describe("after each refresh", () => {
     const { out } = generate("{}");
     expect(out[script]).toBeUndefined();
     expect(out[job]).toBeUndefined();
-    expect(out["prerequisites.sql"]).toBeUndefined();
+    expect(out["prerequisites/dev.sql"]).toBeUndefined();
   });
 
   it("tags the table and its columns, with classification as a tag", () => {
@@ -105,13 +105,13 @@ describe("after each refresh", () => {
   });
 });
 
-describe("prerequisites.sql", () => {
+describe("prerequisites/<environment>.sql", () => {
   it("lists what the run_as principal needs for each capability that is on", () => {
     const sql =
       generate(
         "{ schemas: true, tags: true }",
         "run_as: { service_principal_name: 0b6c3d2e-0000-4000-8000-000000000007 }\n",
-      ).out["prerequisites.sql"] ?? "";
+      ).out["prerequisites/dev.sql"] ?? "";
     expect(sql).toContain(
       "GRANT USE CATALOG, CREATE SCHEMA ON CATALOG `dev` TO `0b6c3d2e-0000-4000-8000-000000000007`;",
     );

@@ -1,6 +1,7 @@
 // Template data for a PySpark transform's Python file. Python string and
 // dict literals are written as JSON, which Python reads the same way.
-import { fullNameText, type ResolvedTable } from "@ingestron/definitions";
+import type { ResolvedTable } from "@ingestron/definitions";
+import { localName, localText } from "./sql-data.js";
 
 const decorators = {
   warn: "expect_all",
@@ -8,15 +9,15 @@ const decorators = {
   fail: "expect_all_or_fail",
 } as const;
 
-/** Everything materialised-view.py.liquid needs. */
-export function pythonData(table: ResolvedTable, header: string) {
+/** Everything materialised-view.py.liquid needs, in the pipeline whose catalog is `catalog`. */
+export function pythonData(table: ResolvedTable, header: string, catalog: string) {
   const store = table.store?.settings ?? {};
   const transform = table.transform!;
   const properties = (store.properties ?? {}) as Record<string, string>;
   return {
     header,
     code: transform.code.trimEnd(),
-    name: JSON.stringify(fullNameText(table.fullName)),
+    name: JSON.stringify(localName(table.fullName, catalog)),
     comment: table.contract.description ? JSON.stringify(table.contract.description) : "",
     cluster: clusterOf(store.cluster_by),
     properties: Object.keys(properties).length > 0 ? pythonDict(Object.entries(properties)) : "",
@@ -34,7 +35,7 @@ export function pythonData(table: ResolvedTable, header: string) {
     function: String(transform.settings.function),
     inputs: Object.entries(transform.inputs).map(([name, full]) => ({
       name: JSON.stringify(name),
-      table: JSON.stringify(full),
+      table: JSON.stringify(localText(full, catalog)),
     })),
   };
 }

@@ -1,0 +1,18 @@
+apiVersion: ingestron.io/v1
+kind: Flow
+id: shop
+description: Orders and customers from the web shop.
+source: shop
+tables:
+  orders:
+    object: orders
+    contract: shop.orders
+    store:
+      with: { mode: upsert, sequence_by: updated_at, delete_when: "op = 'D'", except_columns: [op] }
+    expectations:
+      - { name: positive_total, check: total >= 0 }
+  customers:
+    object: customers
+    contract: shop.customers
+    ingest:
+      with: { format: csv, options: { header: true } }
