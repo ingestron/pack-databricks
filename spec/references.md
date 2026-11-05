@@ -91,3 +91,14 @@ from. All were accessed on 2026-11-04 unless a date is given.
 
 The SQL, Python and Lakeflow Connect syntax are recorded in the package
 README's sources (accessed 2026-10-24).
+
+## Where to find a value (`find`)
+
+Accessed 2026-11-05. A new project's README.md shows these beside each value
+`ingestron init` writes as `REPLACE_ME`:
+
+- [Manage connections for Lakehouse Federation](https://docs.databricks.com/aws/en/query-federation/connections):
+  in Catalog Explorer, the gear icon at the top of the Catalog pane, then
+  Connections, lists a workspace's Unity Catalog connections.
+- [Work with files in Unity Catalog volumes](https://docs.databricks.com/aws/en/volumes/volume-files):
+  a volume's files are at `/Volumes/<catalog>/<schema>/<volume>/…`.
