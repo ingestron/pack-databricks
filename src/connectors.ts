@@ -3,6 +3,10 @@ import type { Connector } from "@ingestron/definitions";
 
 const lakeflow = "https://docs.databricks.com/aws/en/ingestion/lakeflow-connect";
 
+/** Where an owner finds a Unity Catalog connection's name, for a new project's README.md. */
+const connections =
+  "Catalog Explorer: the gear icon at the top of the Catalog pane, then Connections.";
+
 /** One entry per connector an ingest method reads. */
 export const connectors: Connector[] = [
   {
@@ -12,7 +16,11 @@ export const connectors: Connector[] = [
     method: "files",
     object: "a folder under the connection's path",
     settings: [
-      { name: "path", description: "Where the files land, such as /Volumes/main/landing/shop." },
+      {
+        name: "path",
+        description: "Where the files land, such as /Volumes/main/landing/shop.",
+        find: "Catalog Explorer: the volume the files land in; its path is /Volumes/<catalog>/<schema>/<volume>.",
+      },
     ],
     generates: "a streaming table that reads new files with Auto Loader",
     docs: "https://docs.databricks.com/sql/language-manual/functions/read_files.html",
@@ -24,7 +32,11 @@ export const connectors: Connector[] = [
     method: "lakeflow-connect",
     object: "database.schema.table",
     settings: [
-      { name: "uc_connection", description: "The Unity Catalog connection to the source." },
+      {
+        name: "uc_connection",
+        description: "The Unity Catalog connection to the source.",
+        find: connections,
+      },
     ],
     generates: "an ingestion gateway and an ingestion pipeline (Lakeflow Connect)",
     maturity: { status: "Public Preview", checked: "2026-10-25" },
@@ -37,7 +49,11 @@ export const connectors: Connector[] = [
     method: "lakeflow-connect",
     object: "the object name, such as Account",
     settings: [
-      { name: "uc_connection", description: "The Unity Catalog connection to the source." },
+      {
+        name: "uc_connection",
+        description: "The Unity Catalog connection to the source.",
+        find: connections,
+      },
     ],
     generates: "an ingestion pipeline (Lakeflow Connect)",
     maturity: { status: "Public Preview", checked: "2026-10-25" },
@@ -50,7 +66,11 @@ export const connectors: Connector[] = [
     method: "lakeflow-connect",
     object: "the topic",
     settings: [
-      { name: "uc_connection", description: "The Unity Catalog connection to the source." },
+      {
+        name: "uc_connection",
+        description: "The Unity Catalog connection to the source.",
+        find: connections,
+      },
     ],
     generates: "an ingestion pipeline on the PREVIEW channel (Lakeflow Connect)",
     maturity: { status: "Beta", checked: "2026-10-25" },
