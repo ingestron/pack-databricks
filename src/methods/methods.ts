@@ -1,7 +1,7 @@
 // The Databricks methods: what each reads and produces, its smart defaults,
 // its settings schema, and checks that need the whole table.
 import type { Method, ResolvedTable } from "@ingestron/definitions";
-import { renderQuery } from "../sql/query.js";
+import { renderQuery } from "../sql/index.js";
 
 const clusterBy = {
   description: "How the table is clustered: auto, none, or a list of columns.",

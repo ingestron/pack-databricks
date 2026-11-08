@@ -1,15 +1,15 @@
 // The pack: methods, smart defaults, rules and the build function.
-import { contract } from "./methods/contract.js";
+import { contract } from "./methods/index.js";
 import type { Pack } from "@ingestron/definitions";
-import { connectors } from "./methods/connectors.js";
-import { build } from "./output/build.js";
-import { buildEnvironments } from "./fold/fold.js";
-import { request } from "./methods/request.js";
-import { capabilities, tagProblems } from "./methods/capabilities.js";
-import { lakeflowConnect } from "./methods/connect-method.js";
-import { connectGroups, sharedProblems } from "./connect/connect.js";
-import { files, materialisedView, sql, streamingTable } from "./methods/methods.js";
-import { pyspark } from "./methods/pyspark-method.js";
+import { connectors } from "./methods/index.js";
+import { build } from "./output/index.js";
+import { buildEnvironments } from "./fold/index.js";
+import { request } from "./methods/index.js";
+import { capabilities, tagProblems } from "./methods/index.js";
+import { lakeflowConnect } from "./methods/index.js";
+import { connectGroups, sharedProblems } from "./connect/index.js";
+import { files, materialisedView, sql, streamingTable } from "./methods/index.js";
+import { pyspark } from "./methods/index.js";
 
 /**
  * The Databricks pack, version 2. Name it in a standard as `packs: [databricks@2]`. It

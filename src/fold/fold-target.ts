@@ -2,9 +2,9 @@
 // target (mode, workspace, run_as, permissions) as each target's values, and
 // presets for the tags and schedule pause that differ (spec/behaviour.md, 2.3).
 import { splitDeployText, type ResolvedModel } from "@ingestron/definitions";
-import { targetOf, type Data } from "../bundle/bundle.js";
-import { hasContinuous } from "../connect/connect.js";
-import { mapStrings } from "../bundle/walk.js";
+import { targetOf, type Data } from "../bundle/index.js";
+import { hasContinuous } from "../connect/index.js";
+import { mapStrings } from "../bundle/index.js";
 import type { Plan } from "./fold-plan.js";
 import {
   deployProblem,
