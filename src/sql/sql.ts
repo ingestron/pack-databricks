@@ -1,7 +1,7 @@
 // Renders each table's SQL file from the templates in ../templates.
 import type { ResolvedTable } from "@ingestron/definitions";
 import { Liquid } from "liquidjs";
-import { templatesFolder } from "./folders.js";
+import { templatesFolder } from "../folders.js";
 import { renderQuery } from "./query.js";
 import { pythonData } from "./python-data.js";
 import { changeData, localText, sourceData, tableData } from "./sql-data.js";

@@ -12,7 +12,7 @@ import {
 } from "@ingestron/definitions";
 import { parse } from "yaml";
 import { databricks } from "../src/index.js";
-import { bundleView, sameFile, suppliedFor } from "../src/view.js";
+import { bundleView, sameFile, suppliedFor } from "../src/output/view.js";
 
 /** Every file under a folder, by path relative to it. */
 export function folderFiles(folder: string): Record<string, string> {

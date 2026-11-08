@@ -1,6 +1,6 @@
 // Lakeflow Connect: SQL Server through an ingestion gateway.
 import { describe, expect, it } from "vitest";
-import { connection, contract, flow, generate } from "./connect-helpers.js";
+import { connection, contract, flow, generate } from "../connect-helpers.js";
 
 const sqlServer = {
   "erp.yaml": connection("erp", "sqlserver"),

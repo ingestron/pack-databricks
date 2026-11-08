@@ -1,7 +1,7 @@
 // The view of values in code, and of the grants files (spec/behaviour.md, section 4).
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { bundleView } from "../src/view.js";
+import { bundleView } from "../src/output/view.js";
 import { bundle, job, none, pipeline, type Yaml } from "./view-helpers.js";
 
 describe("values in code", () => {

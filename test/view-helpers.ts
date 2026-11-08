@@ -1,6 +1,6 @@
 // Hand-written folded files for the view's tests.
 import { parse, stringify } from "yaml";
-import { bundleView, type Supplied } from "../src/view.js";
+import { bundleView, type Supplied } from "../src/output/view.js";
 
 // Parsed YAML is untyped; the assertions check its shape.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

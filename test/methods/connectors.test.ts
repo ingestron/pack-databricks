@@ -1,7 +1,7 @@
 // Every connector an ingest method reads is described, and each description
 // names a method that really reads it.
 import { describe, expect, it } from "vitest";
-import { databricks } from "../src/index.js";
+import { databricks } from "../../src/index.js";
 
 const ingest = Object.entries(databricks.methods).filter(
   ([, method]) => method.action === "ingest",
