@@ -158,8 +158,19 @@ function optionsOf(table: ResolvedTable): SourceData["options"] {
   return options;
 }
 
+/** What the change-data template reads. */
+export interface ChangeData {
+  changes: string;
+  flow: string;
+  keys: string;
+  sequence: string;
+  delete_when: string;
+  except_columns: string;
+  scd: number;
+}
+
 /** The AUTO CDC parts of a change-data table, in the pipeline whose catalog is `catalog`. */
-export function changeData(table: ResolvedTable, catalog: string) {
+export function changeData(table: ResolvedTable, catalog: string): ChangeData {
   const settings = table.store?.settings ?? {};
   const changes = {
     ...table.fullName,
