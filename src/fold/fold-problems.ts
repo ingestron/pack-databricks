@@ -2,7 +2,7 @@
 // than a comparison of values (spec/behaviour.md, section 5).
 import type { EnvironmentsProblem, ResolvedModel, TargetDifference } from "@ingestron/definitions";
 import { placeOf } from "./fold-names.js";
-import { connectGroups } from "../connect/connect.js";
+import { connectGroups } from "../connect/index.js";
 import { deployProblem, type Models, type Variables } from "./fold-values.js";
 
 /** An `ENVIRONMENTS_DIFFER` error at a definition. */
