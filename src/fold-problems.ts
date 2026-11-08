@@ -46,7 +46,7 @@ function split(targets: string[], test: (target: string) => boolean): [string[],
 export function catalogProblems(
   models: Models,
   catalog: (model: ResolvedModel) => string | undefined,
-) {
+): EnvironmentsProblem[] {
   const targets = Object.keys(models);
   const first = models[targets[0]!]!;
   return first.tables

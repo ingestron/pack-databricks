@@ -9,8 +9,22 @@ const decorators = {
   fail: "expect_all_or_fail",
 } as const;
 
+/** What the Python table template reads. */
+export interface PythonTableData {
+  header: string;
+  code: string;
+  name: string;
+  comment: string;
+  cluster: string;
+  properties: string;
+  expectations: { decorator: string; checks: string; count: number }[];
+  wrapper: string;
+  function: string;
+  inputs: { name: string; table: string }[];
+}
+
 /** Everything materialised-view.py.liquid needs, in the pipeline whose catalog is `catalog`. */
-export function pythonData(table: ResolvedTable, header: string, catalog: string) {
+export function pythonData(table: ResolvedTable, header: string, catalog: string): PythonTableData {
   const store = table.store?.settings ?? {};
   const transform = table.transform!;
   const properties = (store.properties ?? {}) as Record<string, string>;
