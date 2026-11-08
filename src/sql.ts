@@ -1,14 +1,10 @@
 // Renders each table's SQL file from the templates in ../templates.
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ResolvedTable } from "@ingestron/definitions";
 import { Liquid } from "liquidjs";
+import { templatesFolder } from "./folders.js";
 import { renderQuery } from "./query.js";
 import { pythonData } from "./python-data.js";
 import { changeData, localText, sourceData, tableData } from "./sql-data.js";
-
-/** The templates folder, also used by the template parity check. */
-export const templatesFolder = join(dirname(fileURLToPath(import.meta.url)), "../templates/");
 
 const engine = new Liquid({
   root: templatesFolder,
