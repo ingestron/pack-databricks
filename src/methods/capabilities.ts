@@ -2,8 +2,8 @@
 // `manage.<id>` in the platform, and what the platform needs for them. The
 // documentation, the editor and prerequisites.sql all read this list.
 import type { Capability, ResolvedModel } from "@ingestron/definitions";
-import { tagParts } from "./apply-contract.js";
-import { quoteName } from "./query.js";
+import { tagParts } from "../sql/apply-contract.js";
+import { quoteName } from "../sql/query.js";
 
 const owner =
   "The run_as identity owns the tables the pipelines create, so it may change them; any other identity needs MODIFY on each table";

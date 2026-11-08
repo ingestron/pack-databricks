@@ -8,12 +8,12 @@ import {
   type SuppliedValue,
   type TargetDifference,
 } from "@ingestron/definitions";
-import { build } from "./build.js";
+import { build } from "../output/build.js";
 import { foldFiles, type Folded } from "./fold-files.js";
 import { pipelineCatalog, planFold } from "./fold-plan.js";
 import { catalogProblems, continuousProblems, once, unlikeProblem } from "./fold-problems.js";
 import type { Models, Variable } from "./fold-values.js";
-import { bundleView, sameFile, suppliedFor } from "./view.js";
+import { bundleView, sameFile, suppliedFor } from "../output/view.js";
 
 /**
  * One bundle for every target. With an error among the problems, the files are empty.

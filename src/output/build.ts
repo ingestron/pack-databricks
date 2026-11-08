@@ -12,17 +12,17 @@ import {
   yamlText,
   type Data,
   type Task,
-} from "./bundle.js";
+} from "../bundle/bundle.js";
 import {
   connectGroups,
   gatewayPipeline,
   ingestionPipeline,
   previewNote,
   type ConnectGroup,
-} from "./connect.js";
-import { applyContract } from "./apply-contract.js";
-import { prerequisites } from "./capabilities.js";
-import { renderApply, renderSql, sqlFile } from "./sql.js";
+} from "../connect/connect.js";
+import { applyContract } from "../sql/apply-contract.js";
+import { prerequisites } from "../methods/capabilities.js";
+import { renderApply, renderSql, sqlFile } from "../sql/sql.js";
 
 const doNotEdit = "Do not edit: change the definitions and generate again.";
 

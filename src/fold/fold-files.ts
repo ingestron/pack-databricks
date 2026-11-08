@@ -1,15 +1,15 @@
 // The folded bundle's files: the template rendered as one environment's
 // bundle, then each marker made a bundle variable in YAML, a pipeline
 // configuration value in SQL, or a task parameter of the after-refresh script.
-import type { Data } from "./bundle.js";
-import { bundleData, headerOf, scriptPath, written, type YamlFile } from "./build.js";
-import { prerequisites } from "./capabilities.js";
+import type { Data } from "../bundle/bundle.js";
+import { bundleData, headerOf, scriptPath, written, type YamlFile } from "../output/build.js";
+import { prerequisites } from "../methods/capabilities.js";
 import type { Plan } from "./fold-plan.js";
 import { codeProblem, differ, listOf } from "./fold-problems.js";
 import { pauseOf, targetSettings, type Targets } from "./fold-target.js";
 import { hasMarker, marker, markers, type Variable } from "./fold-values.js";
-import { configurationKey, pythonValues } from "./fold-python.js";
-import { mapStrings } from "./walk.js";
+import { configurationKey, pythonValues } from "../output/fold-python.js";
+import { mapStrings } from "../bundle/walk.js";
 
 /** The folded files, and each target's host when it is supplied when deploying. */
 export interface Folded {

@@ -4,9 +4,9 @@
 import { isDeepStrictEqual } from "node:util";
 import { splitDeployText, type ResolvedModel, type SuppliedValue } from "@ingestron/definitions";
 import { parse, stringify } from "yaml";
-import type { Data } from "./bundle.js";
+import type { Data } from "../bundle/bundle.js";
 import { pythonWithValues } from "./fold-python.js";
-import { mapStrings } from "./walk.js";
+import { mapStrings } from "../bundle/walk.js";
 
 /** What the deploying pipeline supplies for one target, as the deploy-time values' text. */
 export interface Supplied {

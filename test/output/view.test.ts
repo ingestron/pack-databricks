@@ -3,7 +3,7 @@
 // bundle/config/mutator/resourcemutator/apply_presets.go (presets) and
 // apply_target_mode.go (development mode), and the variables documentation.
 import { describe, expect, it } from "vitest";
-import { bundle, job, none, pipeline, view } from "./view-helpers.js";
+import { bundle, job, none, pipeline, view } from "../view-helpers.js";
 
 describe("variables", () => {
   it("replace a whole value with its value, keeping a list a list, and a part of a text with its text", () => {

@@ -20,7 +20,7 @@ import {
   type Models,
 } from "./fold-values.js";
 import { differ, listOf } from "./fold-problems.js";
-import { mapStrings } from "./walk.js";
+import { mapStrings } from "../bundle/walk.js";
 
 /** A fold's template, variables and the problems found while planning it. */
 export interface Plan extends TextFold {

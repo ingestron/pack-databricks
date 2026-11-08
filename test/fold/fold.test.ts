@@ -1,8 +1,8 @@
 // One bundle for every environment: values that differ become variables set in
 // each target, and the fold property holds for the first one, two and three targets.
 import { describe, expect, it } from "vitest";
-import { databricks } from "../src/index.js";
-import { fold, foldFailures, resolveAll, shop, yamlOf } from "./fold-helpers.js";
+import { databricks } from "../../src/index.js";
+import { fold, foldFailures, resolveAll, shop, yamlOf } from "../fold-helpers.js";
 
 const three = [
   "  dev: {}",

@@ -1,9 +1,9 @@
 // Pipelines for Lakeflow Connect: one ingestion pipeline per connection, and
 // a gateway in front of it for databases.
 import type { ResolvedModel, ResolvedTable } from "@ingestron/definitions";
-import { schemaRef } from "./bundle.js";
-import { gatewayConnectors } from "./connect-method.js";
-import { quoteName } from "./query.js";
+import { schemaRef } from "../bundle/bundle.js";
+import { gatewayConnectors } from "../methods/connect-method.js";
+import { quoteName } from "../sql/query.js";
 
 type Data = Record<string, unknown>;
 
