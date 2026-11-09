@@ -3,6 +3,8 @@
 // values that differ between environments into bundle variables.
 import type { ResolvedModel, ResolvedTable } from "@ingestron/definitions";
 import { stringify } from "yaml";
+import { jobAlerts } from "./alerts.js";
+import { jobOperations, taskOperations } from "./operations.js";
 
 /** A YAML document as data. */
 export type Data = Record<string, unknown>;
@@ -56,9 +58,18 @@ export function pipelineFile(
     root_path: `../src/${names.pipeline}`,
     libraries: [{ glob: { include: `../src/${names.pipeline}/**` } }],
   };
-  return {
-    resources: { pipelines: { [names.pipeline]: { ...pipeline, ...pipelineExtras(model) } } },
-  };
+  const extras = { ...pipelineExtras(model), ...eventLog(model, pipeline) };
+  return { resources: { pipelines: { [names.pipeline]: { ...pipeline, ...extras } } } };
+}
+
+/**
+ * With quality results, the pipeline publishes its event log, where the expectation
+ * metrics are, to `<pipeline>_event_log` in the pipeline's own catalog and schema.
+ */
+export function eventLog(model: ResolvedModel, pipeline: Data): Data {
+  if (!model.qualityResults) return {};
+  const { name, catalog, schema } = pipeline;
+  return { event_log: { catalog, schema, name: `${String(name)}_event_log` } };
 }
 
 /** A task of the refresh job: a pipeline to refresh, or a Python file to run, after others. */
@@ -76,11 +87,13 @@ const environment = { environment_key: "ingestron", spec: { environment_version:
 /**
  * A job that refreshes the pipelines in order, on the platform's schedule.
  * With a Python task it is built without a schedule too, to run on demand.
+ * Its alerts come from a model built `withAlerts`.
  */
 export function jobFile(model: ResolvedModel, tasks: Task[]): Data | undefined {
   const { platform, names } = model;
   const python = tasks.some((task) => task.python);
   if ((!platform.schedule && !python) || tasks.length === 0) return undefined;
+  const pipelineTask = taskOperations(model);
   const job: Data = {
     name: names.job,
     ...(platform.schedule && {
@@ -90,21 +103,22 @@ export function jobFile(model: ResolvedModel, tasks: Task[]): Data | undefined {
         pause_status: platform.schedule.paused ? "PAUSED" : "UNPAUSED",
       },
     }),
-    tasks: tasks.map(jobTask),
+    ...jobOperations(model),
+    tasks: tasks.map((task) => jobTask(task, pipelineTask)),
     ...(python && { environments: [environment] }),
   };
   if (Object.keys(platform.tags).length > 0) job.tags = platform.tags;
-  if (platform.notifications.on_failure.length > 0)
-    job.email_notifications = { on_failure: platform.notifications.on_failure };
-  return { resources: { jobs: { [names.job]: job } } };
+  return { resources: { jobs: { [names.job]: { ...job, ...jobAlerts(model) } } } };
 }
 
-function jobTask(task: Task): Data {
+/** A task of the job; a pipeline task also takes `pipelineTask`, its retries and timeout. */
+function jobTask(task: Task, pipelineTask: Data): Data {
   return {
     task_key: task.key,
     ...(task.after.length > 0 && { depends_on: task.after.map((key) => ({ task_key: key })) }),
     ...(task.pipeline && {
       pipeline_task: { pipeline_id: `\${resources.pipelines.${task.pipeline}.id}` },
+      ...pipelineTask,
     }),
     ...(task.python && {
       environment_key: environment.environment_key,
@@ -178,7 +192,10 @@ export function pipelineTags(model: ResolvedModel): Data {
   return Object.keys(tags).length > 0 ? { tags } : {};
 }
 
-/** Tags and failure notifications, the same on every pipeline that builds tables. */
+/**
+ * Tags and failure notifications, the same on every pipeline that builds tables. The
+ * notifications come from a model built `withAlerts`.
+ */
 export function pipelineExtras(model: ResolvedModel): Data {
   const { platform } = model;
   const alerts = ["on-update-failure", "on-update-fatal-failure", "on-flow-failure"];

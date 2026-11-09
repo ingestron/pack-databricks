@@ -41,6 +41,10 @@ generation manifest, its lock and the grants files are in the bundle folder but
 are not deployed. The lock is there only while files are written, or after
 writing stopped part way. The grants files are run by hand.
 
+The standard's intent adds to these files, never adds a file: retries,
+timeouts, concurrency and alerts in the job, the event log in the pipelines,
+and audit and rescued columns in a table's SQL (section 2).
+
 `build(model)` gives the same layout for one environment, with one target and
 every value as the model resolves it. It is the fold property's render
 (section 4).
@@ -77,12 +81,53 @@ What `build` writes, which the folded bundle also follows:
   parameter `ingestron.<name>=<value>`. Built for one environment it has no
   parameters, so nothing is replaced.
 - **Grants** are in `prerequisites/<environment>.sql`.
+- **Operations.** The standard's operations policy (the model's `operations`)
+  sets, only for what it gives: on each pipeline task of the refresh job (the
+  refresh and each ingestion task, not the after-refresh task) `max_retries`
+  and `min_retry_interval_millis` from `retries`, and `timeout_seconds` from
+  `timeout`; on the job `max_concurrent_runs` and `queue: { enabled }` from
+  `concurrency`. A duration (`30s`, `5m`, `2h`, `1d`) is written in seconds,
+  and the retry interval in milliseconds.
+- **Alerts.** Each of the Platform's alerts (definitions adds
+  `notifications.on_failure` as an email alert) is raised for each event in
+  its `on` that the standard's `operations.alerts.on` also lists; `slow` only
+  when the standard gives `slow_after`. For a failure, the email addresses,
+  each once in the order written, go to the job's
+  `email_notifications.on_failure` and to every pipeline's `notifications`, as
+  `notifications.on_failure` always has; each destination goes to the job's
+  `webhook_notifications.on_failure` as `{ id }`. For a slow run, the job's
+  `health.rules` is one rule, `metric: RUN_DURATION_SECONDS`,
+  `op: GREATER_THAN` and `value` the `slow_after` in seconds, and its email
+  addresses and destinations go to `on_duration_warning_threshold_exceeded` of
+  `email_notifications` and `webhook_notifications`. The pack keeps the failure addresses as the
+  model's `notifications.on_failure` before it builds or folds, so addresses
+  that differ between environments become the variable
+  `notifications_on_failure` (a list variable when their number differs), as
+  before. A destination id that differs becomes a variable named from its
+  place, such as `alerts_id`. Other alerts whose number differs between
+  environments cannot be folded: the job file is `ENVIRONMENTS_DIFFER`.
+- **Event log.** With quality results (the model's `qualityResults`), the
+  pipeline that builds the tables and each Lakeflow Connect ingestion pipeline
+  have `event_log: { catalog, schema, name: <pipeline>_event_log }`, in the
+  pipeline's own catalog and schema. A gateway has none.
+- **Audit and rescued columns.** Where a table's SQL reads files with
+  `read_files` (a streaming table, the changes table of a change-data table,
+  or a materialised view over files), it selects after the columns read, in
+  the order the table's intent gives them, `current_timestamp() AS <as>` for
+  `audit: loaded_at`, `_metadata.file_path AS <as>` for `source_file` and
+  `_metadata.file_modification_time AS <as>` for `source_modified_at`.
+  Definitions has checked that each `<as>` is a plain lower-case name, so it is
+  not quoted. The other audit values are added by the step that lands the
+  files and are among the columns read. `rescued: true` adds
+  `rescuedDataColumn => '_rescued_data'` after `schemaEvolutionMode` and before
+  the method's own options. AUTO CDC keeps these columns: its
+  `COLUMNS * EXCEPT (…)` leaves out only `except_columns`.
 - **Platform fields.** The pack lists as `platformFields` every Platform
   setting it reads: `mode`; `workspace.host` and `workspace.root_path`;
   `run_as`, `permissions` and `tags`, which it writes as they are;
   `compute.serverless`, `compute.budget_policy_id` and `compute.channel`;
   `schedule.cron`, `schedule.timezone` and `schedule.paused`;
-  `notifications.on_failure`; `grants`, as the grants of a managed schema; and the
+  `notifications.on_failure` and `alerts`; `grants`, as the grants of a managed schema; and the
   four `manage` settings (`schemas`, `tags`, `comments`, `checks`). Definitions
   checks each against the Platform's field reference, so tools can show them with
   their defaults.
@@ -402,8 +447,10 @@ The pack's tests check, on synthetic projects:
   for a table in one environment only;
 - minimality: a value the same in every target stays literal;
 - the golden files in `test/golden`: a retail-shaped project with dev and
-  prod, and with dev, test and prod, and a PySpark transform whose schemas
-  differ by environment.
+  prod, and with dev, test and prod, a PySpark transform whose schemas
+  differ by environment, and the retail project under a kit's standard
+  (`standards`: audit and rescued columns, the event log, retries, a timeout,
+  queueing, and failure and slow alerts, with dev, test and prod).
 
 ## 8. Intent
 
@@ -440,14 +487,17 @@ does with each value. The sources of the Databricks features are in
 | `retention.landed_files`                | Kept by the landing pack                                                    | elsewhere |
 | `quality.results`                       | The pipeline's `event_log`, published to a table                            | used      |
 | `operations.retries`                    | The pipeline task's `max_retries` and `min_retry_interval_millis`           | used      |
-| `operations.timeout`                    | The job's `timeout_seconds`                                                 | used      |
+| `operations.timeout`                    | The pipeline task's `timeout_seconds`                                       | used      |
 | `operations.concurrency`                | The job's `max_concurrent_runs` and `queue`                                 | used      |
-| `operations.alerts: failure`, `slow`    | The job's `email_notifications`, `webhook_notifications` and `health` rules | used      |
+| `operations.alerts: failure`            | The job's `email_notifications` and `webhook_notifications`; pipeline email | used      |
+| `operations.alerts: slow`               | The job's `health` rule and duration warning notifications (Public Preview) | used      |
 | `operations.trigger`                    | File arrival, table update and continuous triggers                          | not yet   |
 
-Every status is generally available on the page the pack checked on
-2026-11-09 (references.md); `history: bitemporal` is Beta, which is why it is
-not yet.
+Every `used` feature is generally available on the page the pack checked on
+2026-11-09 (references.md), except the run duration threshold behind
+`operations.alerts: slow`, which the job configuration page labels Public
+Preview: a standard with `features: ga` that raises slow alerts gets
+`PREVIEW_FEATURE`. `history: bitemporal` is Beta, which is why it is not yet.
 
 ### 8.2 Coverage
 
@@ -471,7 +521,11 @@ A method declares only what differs from the pack:
   history with a streaming table."); `history: none` is used;
 - `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
   ingestion reads the source, not files."); `history: none`, `latest` and `full`
-  are used, as the connector's append mode and `scd_type`.
+  are used, as the connector's append mode and `scd_type`; `rescued` is
+  `not-applicable` ("Managed ingestion has no rescued data column."), as are
+  `audit: loaded_at`, `source_file` and `source_modified_at` ("Managed
+  ingestion writes the table; it adds no metadata columns."); and
+  `storage.clustering` is `not-yet` ("Planned.").
 
 The definitions package reports `NOT_APPLIED` for a value the judging method
 declares `not-yet` or `not-applicable`, and `PREVIEW_FEATURE` for a `used` value

@@ -1,9 +1,12 @@
-// The retail-shaped project folded for dev and prod, and for dev, test and prod,
-// against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
+// The retail-shaped project folded for dev and prod, and for dev, test and prod, and
+// under a kit's standard, against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fold, foldFailures, folderFiles, resolveAll, retail, shop } from "./fold-helpers.js";
+
+/** The retail project under the lakehouse-streaming kit's standard, with alerts. */
+const standards = folderFiles(join(import.meta.dirname, "fixtures/standards"));
 
 const threeEnvironments = [
   "id: retail",
@@ -57,6 +60,7 @@ const cases = {
     environments: ["dev", "test", "prod"],
   },
   pyspark: { files: pyspark, environments: ["dev", "prod"] },
+  standards: { files: standards, environments: ["dev", "test", "prod"] },
 };
 
 describe("a PySpark transform whose names differ", () => {

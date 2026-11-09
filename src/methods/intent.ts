@@ -23,10 +23,16 @@ const pages = {
 };
 
 const ga = (source: string): FeatureStatus => ({ level: "ga", checked: "2026-11-09", source });
-const used = (does: string, source: string): IntentUse => ({
+const publicPreview = (source: string): FeatureStatus => ({
+  level: "preview",
+  label: "Public Preview",
+  checked: "2026-11-09",
+  source,
+});
+const used = (does: string, source: string, status = ga(source)): IntentUse => ({
   use: "used",
   does,
-  status: ga(source),
+  status,
 });
 const notYet: IntentUse = { use: "not-yet", reason: "Planned." };
 const landing: IntentUse = {
@@ -34,6 +40,9 @@ const landing: IntentUse = {
   reason: "The ingest step that lands the files adds it.",
 };
 const landed: IntentUse = { use: "elsewhere", reason: "The landing pack keeps landed files." };
+
+/** The audit values the pack's own reading of files adds. */
+const fileAudit = ["loaded_at", "source_file", "source_modified_at"];
 
 /** The audit values the ingest step adds, which the pack's own reading of files cannot. */
 const ingestAudit = ["run_id", "window_start", "window_end", "source_object", "source_connection"];
@@ -62,15 +71,17 @@ export const intent: Record<string, IntentUse> = {
   "storage.clustering=none": used("No CLUSTER BY clause.", pages.clustering),
   "quality.results": used("Publishes the pipeline's event log to a table.", pages.eventLog),
   "operations.retries": used("The pipeline task's max_retries and retry interval.", pages.task),
-  "operations.timeout": used("The job's timeout_seconds.", pages.job),
+  "operations.timeout": used("The pipeline task's timeout_seconds.", pages.task),
   "operations.concurrency": used("The job's max_concurrent_runs and queue.", pages.job),
   "operations.alerts=failure": used(
     "The job's email and webhook failure alerts.",
     pages.notifications,
   ),
+  // Duration thresholds are Public Preview on the configure-job page.
   "operations.alerts=slow": used(
     "A run duration health rule and warning alert.",
-    pages.notifications,
+    pages.job,
+    publicPreview(pages.job),
   ),
 };
 
@@ -93,6 +104,17 @@ export const connectIntent: Record<string, IntentUse> = {
   "history=latest": used("The connector's scd_type 1.", pages.connectScd),
   "history=full": used("The connector's scd_type 2.", pages.connectScd),
   "history=none": used("The connector's append mode.", pages.connectScd),
+  rescued: { use: "not-applicable", reason: "Managed ingestion has no rescued data column." },
+  "storage.clustering": notYet,
+  ...Object.fromEntries(
+    fileAudit.map((value) => [
+      `audit=${value}`,
+      {
+        use: "not-applicable",
+        reason: "Managed ingestion writes the table; it adds no metadata columns.",
+      },
+    ]),
+  ),
 };
 
 /** What differs for a materialised view, which is recomputed on each update. */

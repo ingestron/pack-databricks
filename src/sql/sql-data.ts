@@ -3,6 +3,7 @@
 // `required` or `with`) because python-liquid refuses them after a dot.
 import type { Column, FullName, ResolvedTable } from "@ingestron/definitions";
 import { quoteName } from "./query.js";
+import { auditColumns, rescuedColumn } from "./audit.js";
 
 /** The table definition shared by every SQL file. */
 export interface TableData {
@@ -17,7 +18,10 @@ export interface TableData {
 /** A `read_files` call. */
 export interface SourceData {
   stream: boolean;
-  /** The select list: `*`, or with source columns renamed to their contract names. */
+  /**
+   * The select list: `*`, or with source columns renamed to their contract names, then
+   * the audit columns that reading files adds.
+   */
   select: string;
   path: string;
   options: { key: string; value: string }[];
@@ -79,7 +83,7 @@ function clusterOf(value: unknown): string {
 export function sourceData(table: ResolvedTable, stream: boolean): SourceData {
   return {
     stream,
-    select: selectOf(table),
+    select: [selectOf(table), ...auditColumns(table)].join(", "),
     path: sqlString(pathOf(table)),
     options: optionsOf(table),
   };
@@ -131,7 +135,10 @@ function pathOf(table: ResolvedTable): string {
   return `${base}/${object}`;
 }
 
-/** Format, schema hints from the contract, schema evolution, then the user's own options. */
+/**
+ * Format, schema hints from the contract, schema evolution, the rescued data column,
+ * then the user's own options.
+ */
 function optionsOf(table: ResolvedTable): SourceData["options"] {
   const settings = table.ingest?.settings ?? {};
   const options: SourceData["options"] = [
@@ -152,6 +159,8 @@ function optionsOf(table: ResolvedTable): SourceData["options"] {
       key: "schemaEvolutionMode",
       value: sqlString(String(settings.schema_evolution)),
     });
+  const rescued = rescuedColumn(table);
+  if (rescued) options.push({ key: "rescuedDataColumn", value: sqlString(rescued) });
   for (const [key, value] of Object.entries((settings.options ?? {}) as Record<string, unknown>)) {
     options.push({ key, value: typeof value === "string" ? sqlString(value) : String(value) });
   }

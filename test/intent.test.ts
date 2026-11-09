@@ -50,6 +50,37 @@ describe("coverage", () => {
     expect(intentUseOf(connect, "load.mode", "files")?.use).toBe("not-applicable");
     expect(intentUseOf(connect, "history", "full")?.use).toBe("used");
   });
+
+  it("marks the run duration warning as a Public Preview feature", () => {
+    expect(intentUseOf(databricks, "operations.alerts", "slow")).toEqual({
+      use: "used",
+      does: "A run duration health rule and warning alert.",
+      status: {
+        level: "preview",
+        label: "Public Preview",
+        checked: "2026-11-09",
+        source: "https://docs.databricks.com/aws/en/jobs/configure-job",
+      },
+    });
+    expect(intentUseOf(databricks, "operations.alerts", "failure")?.use).toBe("used");
+  });
+
+  it("gives Lakeflow Connect no rescued, audit or clustering columns of its own", () => {
+    const connect = databricks.methods["lakeflow-connect"] as Method;
+    expect(intentUseOf(connect, "rescued")).toEqual({
+      use: "not-applicable",
+      reason: "Managed ingestion has no rescued data column.",
+    });
+    expect(intentUseOf(connect, "storage.clustering", "auto")).toEqual({
+      use: "not-yet",
+      reason: "Planned.",
+    });
+    for (const value of ["loaded_at", "source_file", "source_modified_at"])
+      expect(intentUseOf(connect, "audit", value), value).toEqual({
+        use: "not-applicable",
+        reason: "Managed ingestion writes the table; it adds no metadata columns.",
+      });
+  });
 });
 
 describe("aliases and defaults", () => {

@@ -29,6 +29,7 @@ describe("platform fields", () => {
       "schedule.timezone",
       "schedule.paused",
       "notifications.on_failure",
+      "alerts",
       "grants",
       "manage.schemas",
       "manage.tags",

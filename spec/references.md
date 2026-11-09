@@ -123,14 +123,24 @@ BITEMPORAL` is Beta, so `history: bitemporal` is not used.
   expectation metrics are (`quality.results`). No release label.
 - [Configure a task](https://docs.databricks.com/aws/en/jobs/configure-task):
   `max_retries`, `min_retry_interval_millis` and `timeout_seconds` on a task
-  (`operations.retries`). The page's default is no retries.
+  (`operations.retries`, `operations.timeout`). The page's default is no
+  retries.
 - [Configure a job](https://docs.databricks.com/aws/en/jobs/configure-job):
-  `max_concurrent_runs`, `queue` and `timeout_seconds`
-  (`operations.concurrency`, `operations.timeout`).
+  `max_concurrent_runs` and `queue` (`operations.concurrency`), and the run
+  duration threshold of a job's health rules, which the page labels Public
+  Preview (`operations.alerts: slow`).
 - [Job notifications](https://docs.databricks.com/aws/en/jobs/notifications):
-  email and webhook notifications, and the run duration warning
-  (`operations.alerts`). The page labels only SQL conditions for triggers as
-  Beta; the duration warning has no label.
+  email and webhook notifications, on failure and when a run passes its
+  duration threshold (`operations.alerts`); at most three destinations per
+  event.
+- Bundle JSON schema, `databricks bundle schema` from Databricks CLI v1.23.0,
+  read 2026-11-09: `jobs.JobsHealthOperator` allows only `GREATER_THAN` (the
+  `op` of a health rule), and `jobs.JobsHealthMetric` has
+  `RUN_DURATION_SECONDS`; `webhook_notifications.on_failure` and
+  `on_duration_warning_threshold_exceeded` take a list of `{ id }`
+  (`jobs.Webhook`), which the bundle resources page does not show;
+  `queue` takes `{ enabled }`; a pipeline's `event_log` takes `catalog`,
+  `schema` and `name`. The `standards` golden bundle validates against it.
 - [Bundle resources](https://docs.databricks.com/aws/en/dev-tools/bundles/resources):
   the keys of the `jobs` and `pipelines` resources, checked against the bundle
   JSON schema of Databricks CLI v1.23.0.

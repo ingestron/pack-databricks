@@ -4,7 +4,7 @@ import { memoryFiles } from "@ingestron/config";
 import { resolveDefinitions } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
-import { fold, folderFiles, foldFailures, resolveAll, retail } from "./fold-helpers.js";
+import { fold, folderFiles, foldFailures, resolveAll, retail, yamlOf } from "./fold-helpers.js";
 import { join } from "node:path";
 
 const golden = folderFiles(join(import.meta.dirname, "golden/retail"));
@@ -108,7 +108,7 @@ describe("folding with the new model fields", () => {
     expect(folded.files).toEqual(golden);
   });
 
-  it("leaves alerts that differ between environments out of the variables", () => {
+  it("makes email alerts that differ between environments one list variable", () => {
     const withAlerts = {
       ...moved,
       "platform.yaml": moved["platform.yaml"]!.replace(
@@ -128,6 +128,28 @@ describe("folding with the new model fields", () => {
     const folded = fold(models);
     expect(folded.problems).toEqual([]);
     expect(foldFailures(models)).toEqual([]);
-    expect(folded.files).toEqual(golden);
+    const job = yamlOf(folded.files, "resources/retail_refresh.job.yml").resources.jobs;
+    expect(job.retail_refresh.email_notifications).toEqual({
+      on_failure: "${var.notifications_on_failure}",
+    });
+    const pipeline = yamlOf(folded.files, "resources/retail.pipeline.yml").resources.pipelines;
+    expect(pipeline.retail.notifications[0].email_recipients).toBe(
+      "${var.notifications_on_failure}",
+    );
+    const bundle = yamlOf(folded.files, "databricks.yml");
+    expect(bundle.variables.notifications_on_failure).toEqual({
+      description: "Platform setting notifications.on_failure.",
+      type: "complex",
+    });
+    expect(bundle.targets.dev.variables.notifications_on_failure).toEqual([
+      "dev-team@example.com",
+      "sales-data@example.com",
+    ]);
+    expect(bundle.targets.prod.variables.notifications_on_failure).toEqual([
+      "sales-data@example.com",
+    ]);
+    const unchanged = (path: string) => !path.startsWith("resources/") && path !== "databricks.yml";
+    for (const path of Object.keys(golden).filter(unchanged))
+      expect(folded.files[path], path).toBe(golden[path]);
   });
 });
