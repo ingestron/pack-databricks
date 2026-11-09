@@ -3,30 +3,7 @@ import { memoryFiles } from "@ingestron/config";
 import { resolveDefinitions, type Pack } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
-
-const base: Record<string, string> = {
-  "project.yaml": "id: shop\nenvironments: { dev: {} }\nimports: ['*.yaml']\n",
-  "standard.yaml": "apiVersion: ingestron.io/v1\nkind: Standard\nid: acme\npacks: [databricks@2]\n",
-  "files.yaml":
-    "apiVersion: ingestron.io/v1\nkind: Connection\nid: files\nconnector: files\nconnectivity: public\nsettings: { path: /Volumes/dev/landing/shop/ }\n",
-  "flow.yaml":
-    "apiVersion: ingestron.io/v1\nkind: Flow\nid: shop\nsource: files\ntables:\n  orders: { object: /orders, contract: orders }\n",
-  "orders.yaml": [
-    "apiVersion: v3.1.0",
-    "kind: DataContract",
-    "id: orders",
-    "version: 1.0.0",
-    "status: active",
-    "schema:",
-    "  - name: orders",
-    "    logicalType: object",
-    "    description: It's every order.",
-    "    properties:",
-    "      - { name: id, logicalType: integer, required: true, primaryKey: true }",
-    "      - { name: updated_at, logicalType: timestamp }",
-    "",
-  ].join("\n"),
-};
+import { base } from "./pack-helpers.js";
 
 function generate(changes: Record<string, string> = {}) {
   const result = resolveDefinitions(memoryFiles({ ...base, ...changes }), {
@@ -62,6 +39,7 @@ describe("streaming tables", () => {
     const noKey = { "orders.yaml": base["orders.yaml"]!.replace(", primaryKey: true", "") };
     const { result } = generate({ ...withStore("  with: { mode: upsert }"), ...noKey });
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      '"mode" is now written as intent: history: latest.',
       '"streaming-table" for table "orders": mode upsert needs primary key columns in the contract.',
       '"streaming-table" for table "orders": mode upsert needs "sequence_by".',
     ]);
@@ -156,6 +134,7 @@ describe("platform", () => {
       "apiVersion: ingestron.io/v1\nkind: Platform\nid: lake\ncompute: { serverless: false }\n";
     const { result } = generate({ "platform.yaml": platform });
     expect(result.diagnostics).toMatchObject([
+      { code: "PLATFORM_FIELD_MOVED", severity: "warning" },
       { code: "PACK_CHECK", location: { file: "platform.yaml" } },
     ]);
   });
@@ -176,6 +155,8 @@ describe("columns the landed files carry beyond the contract", () => {
   const lander: Pack = {
     ...databricks,
     id: "lander",
+    platformFields: [],
+    platformSection: undefined,
     rules: { ingest: { default: "land" } },
     methods: {
       land: {

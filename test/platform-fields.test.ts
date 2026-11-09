@@ -1,6 +1,10 @@
 // The Platform settings the pack lists for tools to show.
 import { memoryFiles } from "@ingestron/config";
-import { documentReference, resolveDefinitions } from "@ingestron/definitions";
+import {
+  documentReference,
+  platformSectionReference,
+  resolveDefinitions,
+} from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
 
@@ -30,11 +34,16 @@ describe("platform fields", () => {
       "manage.tags",
       "manage.comments",
       "manage.checks",
+      "databricks.warehouse_id",
     ]);
   });
 
-  it("lists only fields the Platform document has", () => {
-    const known = new Set(documentReference("Platform").map((field) => field.path.join(".")));
+  it("lists only fields the Platform document or the pack's own section has", () => {
+    const known = new Set(
+      [...documentReference("Platform"), ...platformSectionReference(databricks)].map((field) =>
+        field.path.join("."),
+      ),
+    );
     for (const path of databricks.platformFields ?? []) expect(known.has(path), path).toBe(true);
   });
 

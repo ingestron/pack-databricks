@@ -404,3 +404,104 @@ The pack's tests check, on synthetic projects:
 - the golden files in `test/golden`: a retail-shaped project with dev and
   prod, and with dev, test and prod, and a PySpark transform whose schemas
   differ by environment.
+
+## 8. Intent
+
+A standard can say what a table keeps and how its data is loaded as intent: a
+vocabulary the definitions specification (section 11) defines for every
+engine, such as `history: latest` or `load: files`. The pack declares what it
+does with each value. The sources of the Databricks features are in
+[references.md](references.md), under "Intent".
+
+### 8.1 Mapping
+
+| Intent                                  | Databricks                                                                  | Status    |
+| --------------------------------------- | --------------------------------------------------------------------------- | --------- |
+| `load.mode: files`                      | Auto Loader, through `read_files`                                           | used      |
+| `load.mode: incremental`                | Query-based Lakeflow Connect (`cursor_columns`)                             | not yet   |
+| `load.mode: changes`                    | Lakeflow Connect change capture; AUTO CDC from a change feed                | not yet   |
+| `load.mode: full`                       | AUTO CDC from a snapshot; a materialised view over `read_files`             | not yet   |
+| `history: none`                         | A streaming table that appends                                              | used      |
+| `history: latest`                       | AUTO CDC `STORED AS SCD TYPE 1`; the connector's `scd_type` 1               | used      |
+| `history: full`                         | AUTO CDC `STORED AS SCD TYPE 2`; the connector's `scd_type` 2               | used      |
+| `history: bitemporal`                   | AUTO CDC `STORED AS BITEMPORAL` (Beta)                                      | not yet   |
+| `sequence`                              | AUTO CDC `SEQUENCE BY`                                                      | used      |
+| `load.deletes.when`                     | AUTO CDC `APPLY AS DELETE WHEN`                                             | used      |
+| `load.deletes.mode`, `load.cursor`      | `deletion_condition`, `cursor_columns`                                      | not yet   |
+| `audit: loaded_at`                      | `current_timestamp()`                                                       | used      |
+| `audit: source_file`                    | `_metadata.file_path`                                                       | used      |
+| `audit: source_modified_at`             | `_metadata.file_modification_time`                                          | used      |
+| `audit: run_id`, `window_*`, `source_*` | Added by the step that lands the files                                      | elsewhere |
+| `audit: row_hash`                       | A hash column                                                               | not yet   |
+| `rescued`                               | The `_rescued_data` column of `read_files`                                  | used      |
+| `storage.clustering: auto`, `none`      | `CLUSTER BY AUTO`; no `CLUSTER BY`                                          | used      |
+| `storage.clustering: keys`, `features`  | `CLUSTER BY (…)`; table properties                                          | not yet   |
+| `retention.time_travel`, `log`          | `delta.deletedFileRetentionDuration`, `delta.logRetentionDuration`          | not yet   |
+| `retention.landed_files`                | Kept by the landing pack                                                    | elsewhere |
+| `quality.results`                       | The pipeline's `event_log`, published to a table                            | used      |
+| `operations.retries`                    | The pipeline task's `max_retries` and `min_retry_interval_millis`           | used      |
+| `operations.timeout`                    | The job's `timeout_seconds`                                                 | used      |
+| `operations.concurrency`                | The job's `max_concurrent_runs` and `queue`                                 | used      |
+| `operations.alerts: failure`, `slow`    | The job's `email_notifications`, `webhook_notifications` and `health` rules | used      |
+| `operations.trigger`                    | File arrival, table update and continuous triggers                          | not yet   |
+
+Every status is generally available on the page the pack checked on
+2026-11-09 (references.md); `history: bitemporal` is Beta, which is why it is
+not yet.
+
+### 8.2 Coverage
+
+The pack's `intent` covers every intent path and value, and a test fails when
+one is missing. An entry is one of:
+
+- `used`, with what it does and the feature's release status (level, the page
+  and the date checked), for every `used` row of section 8.1;
+- `elsewhere`, for `retention.landed_files` and the audit values `run_id`,
+  `window_start`, `window_end`, `source_object` and `source_connection`: the
+  step that lands the files keeps or adds them. Where this pack reads the
+  files in place (the `files` method) or the source (`lakeflow-connect`),
+  nothing lands them, so they are `not-yet` for those methods;
+- `not-yet` with the reason "Planned.", for every other path and value: the
+  table above is the target, not what the pack builds today.
+
+A method declares only what differs from the pack:
+
+- `materialised-view`: `history: latest` and `history: full` are
+  `not-applicable` ("A materialised view is recomputed on each update; keep
+  history with a streaming table."); `history: none` is used;
+- `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
+  ingestion reads the source, not files."); `history: none`, `latest` and `full`
+  are used, as the connector's append mode and `scd_type`.
+
+The definitions package reports `NOT_APPLIED` for a value the judging method
+declares `not-yet` or `not-applicable`, and `PREVIEW_FEATURE` for a `used` value
+whose status is preview when the standard says `features: ga`.
+
+### 8.3 Aliases and defaults
+
+The `mode`, `sequence_by` and `delete_when` settings of `streaming-table` are
+other names for intent, and `mode` of `lakeflow-connect` is the same alias:
+
+| Setting         | Intent              |
+| --------------- | ------------------- |
+| `mode: append`  | `history: none`     |
+| `mode: upsert`  | `history: latest`   |
+| `mode: history` | `history: full`     |
+| `sequence_by`   | `sequence`          |
+| `delete_when`   | `load.deletes.when` |
+
+A table built from the intent gives the files a table built from the setting
+gives. The methods fill in intent that nothing declares: `streaming-table`
+`history: none`, `lakeflow-connect` `history: latest` and `files`
+`load.mode: files`, which are what they did before intent existed.
+
+### 8.4 The Platform's `databricks` section
+
+The Platform fields that belong to Databricks are written under `databricks`:
+`mode`, `workspace`, `run_as`, `compute`, `permissions`, `manage` and `grants`,
+each with the schema it had at the top of the Platform, and `warehouse_id`,
+the SQL warehouse that runs the bundle's SQL tasks. The section allows no other
+field. A project that still writes a moved field at the top gets
+`PLATFORM_FIELD_MOVED` (a warning), and the output is the same. The pack reads
+each field from either place; `databricks.warehouse_id` is listed with the
+other Platform settings the pack reads.

@@ -9,7 +9,8 @@ import { capabilities, tagProblems } from "./methods/index.js";
 import { lakeflowConnect } from "./methods/index.js";
 import { connectGroups, sharedProblems } from "./connect/index.js";
 import { files, materialisedView, sql, streamingTable } from "./methods/index.js";
-import { pyspark } from "./methods/index.js";
+import { intent, pyspark } from "./methods/index.js";
+import { platformSection } from "./platform-section.js";
 
 /**
  * The Databricks pack, version 2. Name it in a standard as `packs: [databricks@2]`. It
@@ -82,8 +83,11 @@ export const databricks: Pack = {
     "manage.tags",
     "manage.comments",
     "manage.checks",
+    "databricks.warehouse_id",
   ],
+  platformSection,
   contract,
+  intent,
   check(model) {
     const problems: string[] = [];
     if (!model.platform.compute.serverless)

@@ -87,6 +87,57 @@ from. All were accessed on 2026-11-04 unless a date is given.
   recreation of the following UC schemas. Any underlying data may be lost"),
   and without a terminal fails unless `--auto-approve` is given.
 
+## Intent
+
+Accessed 2026-11-09. The sources of the `used` entries in the pack's intent
+(spec, section 8). Where a page carries no release label, the pack records the
+feature as generally available.
+
+- [Auto Loader](https://docs.databricks.com/aws/en/ingestion/cloud-object-storage/auto-loader/)
+  and [read_files](https://docs.databricks.com/aws/en/sql/language-manual/functions/read_files):
+  `STREAM read_files(path, format => …)` reads each new file once
+  (`load.mode: files`). The pages carry no release label.
+- [Auto Loader schema](https://docs.databricks.com/aws/en/ingestion/cloud-object-storage/auto-loader/schema):
+  inference adds `_rescued_data`, which holds values that do not parse
+  (`rescued`). No release label.
+- [File metadata column](https://docs.databricks.com/aws/en/ingestion/file-metadata-column):
+  `_metadata.file_path` and `_metadata.file_modification_time` (`audit:
+source_file` and `source_modified_at`); `current_timestamp()` gives
+  `loaded_at`. Select the fields, not the whole struct. No release label.
+- [AUTO CDC](https://docs.databricks.com/aws/en/ldp/cdc): `KEYS`,
+  `SEQUENCE BY`, `APPLY AS DELETE WHEN` and `STORED AS SCD TYPE 1 | 2` (`history:
+latest | full`, `sequence`, `load.deletes.when`); no release label. `STORED AS
+BITEMPORAL` is Beta, so `history: bitemporal` is not used.
+- [Lakeflow Connect SCD](https://docs.databricks.com/aws/en/ingestion/lakeflow-connect/scd):
+  the connector's `scd_type`, the same history for managed ingestion.
+- [Streaming table](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-streaming-table)
+  and
+  [materialised view](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-materialized-view):
+  a materialised view is recomputed on each update, so it keeps no history; a
+  streaming table appends. `CLUSTER BY AUTO` is generally available.
+- [Liquid clustering](https://docs.databricks.com/aws/en/delta/clustering):
+  `CLUSTER BY AUTO` and `CLUSTER BY (…)` (`storage.clustering`). Generally
+  available.
+- [Pipeline event log](https://docs.databricks.com/aws/en/ldp/monitor-event-logs):
+  `event_log: {catalog, schema, name}` publishes the log to a table, where the
+  expectation metrics are (`quality.results`). No release label.
+- [Configure a task](https://docs.databricks.com/aws/en/jobs/configure-task):
+  `max_retries`, `min_retry_interval_millis` and `timeout_seconds` on a task
+  (`operations.retries`). The page's default is no retries.
+- [Configure a job](https://docs.databricks.com/aws/en/jobs/configure-job):
+  `max_concurrent_runs`, `queue` and `timeout_seconds`
+  (`operations.concurrency`, `operations.timeout`).
+- [Job notifications](https://docs.databricks.com/aws/en/jobs/notifications):
+  email and webhook notifications, and the run duration warning
+  (`operations.alerts`). The page labels only SQL conditions for triggers as
+  Beta; the duration warning has no label.
+- [Bundle resources](https://docs.databricks.com/aws/en/dev-tools/bundles/resources):
+  the keys of the `jobs` and `pipelines` resources, checked against the bundle
+  JSON schema of Databricks CLI v1.23.0.
+- [SQL warehouses](https://docs.databricks.com/aws/en/compute/sql-warehouse/):
+  a warehouse's connection details show its HTTP path, which ends with the
+  warehouse ID (`databricks.warehouse_id`).
+
 ## Earlier sources
 
 The SQL, Python and Lakeflow Connect syntax are recorded in the package
