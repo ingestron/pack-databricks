@@ -83,9 +83,10 @@ function clusterOf(value: unknown): string {
 export function sourceData(table: ResolvedTable, stream: boolean): SourceData {
   return {
     stream,
-    select: [selectOf(table), ...auditColumns(table)].join(", "),
+    // Only a streaming table adds audit and rescued columns (spec/behaviour.md, section 2).
+    select: [selectOf(table), ...(stream ? auditColumns(table) : [])].join(", "),
     path: sqlString(pathOf(table)),
-    options: optionsOf(table),
+    options: optionsOf(table, stream),
   };
 }
 
@@ -136,22 +137,15 @@ function pathOf(table: ResolvedTable): string {
 }
 
 /**
- * Format, schema hints from the contract, schema evolution, the rescued data column,
- * then the user's own options.
+ * Format, schema hints from the contract, schema evolution, the rescued data column of a
+ * streaming table unless the user's options name it, then the user's own options.
  */
-function optionsOf(table: ResolvedTable): SourceData["options"] {
+function optionsOf(table: ResolvedTable, stream: boolean): SourceData["options"] {
   const settings = table.ingest?.settings ?? {};
   const options: SourceData["options"] = [
     { key: "format", value: sqlString(String(settings.format)) },
   ];
-  // Hints name the columns as the files have them.
-  const source = new Set(renamedColumns(table));
-  const hints = table.contract.columns
-    .filter((column) => column.type)
-    .map((column) => {
-      const name = source.has(column) ? column.physicalName! : column.name;
-      return `${quoteName(name)} ${column.type}`;
-    });
+  const hints = hintsOf(table);
   if (settings.schema_hints === true && hints.length > 0)
     options.push({ key: "schemaHints", value: sqlString(hints.join(", ")) });
   if (settings.schema_evolution)
@@ -159,12 +153,29 @@ function optionsOf(table: ResolvedTable): SourceData["options"] {
       key: "schemaEvolutionMode",
       value: sqlString(String(settings.schema_evolution)),
     });
-  const rescued = rescuedColumn(table);
+  const own = (settings.options ?? {}) as Record<string, unknown>;
+  const rescued = stream ? rescuedColumn(table, own) : undefined;
   if (rescued) options.push({ key: "rescuedDataColumn", value: sqlString(rescued) });
-  for (const [key, value] of Object.entries((settings.options ?? {}) as Record<string, unknown>)) {
-    options.push({ key, value: typeof value === "string" ? sqlString(value) : String(value) });
-  }
-  return options;
+  return [...options, ...ownOptions(own)];
+}
+
+/** The method's own `read_files` options, a text as a SQL string. */
+function ownOptions(own: Record<string, unknown>): SourceData["options"] {
+  return Object.entries(own).map(([key, value]) => ({
+    key,
+    value: typeof value === "string" ? sqlString(value) : String(value),
+  }));
+}
+
+/** Schema hints from the contract's types, naming the columns as the files have them. */
+function hintsOf(table: ResolvedTable): string[] {
+  const source = new Set(renamedColumns(table));
+  return table.contract.columns
+    .filter((column) => column.type)
+    .map((column) => {
+      const name = source.has(column) ? column.physicalName! : column.name;
+      return `${quoteName(name)} ${column.type}`;
+    });
 }
 
 /** What the change-data template reads. */

@@ -33,7 +33,7 @@ function pipelineOf(files: Record<string, string>) {
 }
 
 describe("operations", () => {
-  it("retries each pipeline task, times it out and queues the job's runs", () => {
+  it("retries each pipeline task, and times out and queues the job's runs", () => {
     const files = folded(
       retailWith([
         "operations:",
@@ -44,11 +44,9 @@ describe("operations", () => {
     );
     const job = jobOf(files);
     const refresh = job.tasks.find((task: { task_key: string }) => task.task_key === "refresh");
-    expect(refresh).toMatchObject({
-      max_retries: 2,
-      min_retry_interval_millis: 300000,
-      timeout_seconds: 7200,
-    });
+    expect(refresh).toMatchObject({ max_retries: 2, min_retry_interval_millis: 300000 });
+    expect(refresh.timeout_seconds).toBeUndefined();
+    expect(job.timeout_seconds).toBe(7200);
     expect(job.max_concurrent_runs).toBe(1);
     expect(job.queue).toEqual({ enabled: true });
   });
@@ -58,6 +56,7 @@ describe("operations", () => {
     expect(job.max_concurrent_runs).toBeUndefined();
     expect(job.queue).toBeUndefined();
     expect(job.health).toBeUndefined();
+    expect(job.timeout_seconds).toBeUndefined();
     expect(job.tasks[0].max_retries).toBeUndefined();
     expect(job.tasks[0].timeout_seconds).toBeUndefined();
   });

@@ -1,5 +1,5 @@
-// The audit and rescued columns that reading files with `read_files` can add
-// (spec/behaviour.md, section 2). Other audit values are added by the step that
+// The audit and rescued columns that a streaming table reading files with `read_files`
+// adds (spec/behaviour.md, section 2). Other audit values are added by the step that
 // lands the files, so they are among the columns read.
 import type { AuditValue, ResolvedTable } from "@ingestron/definitions";
 
@@ -21,7 +21,15 @@ export function auditColumns(table: ResolvedTable): string[] {
   });
 }
 
-/** The column that keeps data that does not fit, when the table's intent keeps it. */
-export function rescuedColumn(table: ResolvedTable): string | undefined {
-  return table.intent.rescued === true ? "_rescued_data" : undefined;
+/**
+ * The column that keeps data that does not fit, when the table's intent keeps it and the
+ * method's own `read_files` options do not already name one, so it is not given twice.
+ */
+export function rescuedColumn(
+  table: ResolvedTable,
+  options: Record<string, unknown>,
+): string | undefined {
+  const named = Object.keys(options).some((key) => key.toLowerCase() === "rescueddatacolumn");
+  if (table.intent.rescued !== true || named) return undefined;
+  return "_rescued_data";
 }

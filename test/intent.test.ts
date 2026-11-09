@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
 import { join } from "node:path";
 import { fold, folderFiles, resolveAll, retail } from "./fold-helpers.js";
+import { base } from "./pack-helpers.js";
 
 const golden = folderFiles(join(import.meta.dirname, "golden/retail"));
 
@@ -84,6 +85,13 @@ describe("coverage", () => {
 });
 
 describe("aliases and defaults", () => {
+  const clustering = {
+    values: {
+      auto: { storage: { clustering: "auto" } },
+      none: { storage: { clustering: "none" } },
+    },
+  };
+
   it("declares the aliases and intent defaults", () => {
     const streaming = databricks.methods["streaming-table"] as Method;
     expect(streaming.aliases).toEqual({
@@ -96,6 +104,10 @@ describe("aliases and defaults", () => {
       },
       sequence_by: { path: "sequence" },
       delete_when: { path: "load.deletes.when" },
+      cluster_by: clustering,
+    });
+    expect((databricks.methods["materialised-view"] as Method).aliases).toEqual({
+      cluster_by: clustering,
     });
     expect(streaming.intentDefaults).toEqual({ history: "none" });
     expect((databricks.methods["lakeflow-connect"] as Method).intentDefaults).toEqual({
@@ -136,5 +148,31 @@ describe("aliases and defaults", () => {
     expect(applied.map((item) => item.message)).toEqual([
       expect.stringContaining("A materialised view is recomputed on each update"),
     ]);
+  });
+
+  it("clusters by nothing when the standard's storage says none", () => {
+    const standard = `${base["standard.yaml"]}storage: { clustering: none }\n`;
+    const { model, diagnostics } = resolve({ ...base, "standard.yaml": standard });
+    expect(diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+    const sql = databricks.build(model!)["src/shop/bronze/orders.sql"]!;
+    expect(sql).toContain("CREATE OR REFRESH STREAMING TABLE");
+    expect(sql).not.toContain("CLUSTER BY");
+  });
+
+  it("clusters a materialised view by nothing when the standard's storage says none", () => {
+    const standard = `${base["standard.yaml"]}storage: { clustering: none }\n`;
+    const flow = base["flow.yaml"]!.replace(
+      "source: files\n",
+      "source: files\nstore: { uses: materialised-view }\n",
+    );
+    const { model } = resolve({ ...base, "standard.yaml": standard, "flow.yaml": flow });
+    const sql = databricks.build(model!)["src/shop/bronze/orders.sql"]!;
+    expect(sql).toContain("CREATE OR REFRESH MATERIALIZED VIEW");
+    expect(sql).not.toContain("CLUSTER BY");
+  });
+
+  it("still clusters by auto without storage intent", () => {
+    const { model } = resolve(base);
+    expect(databricks.build(model!)["src/shop/bronze/orders.sql"]).toContain("CLUSTER BY AUTO");
   });
 });

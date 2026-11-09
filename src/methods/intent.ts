@@ -71,7 +71,7 @@ export const intent: Record<string, IntentUse> = {
   "storage.clustering=none": used("No CLUSTER BY clause.", pages.clustering),
   "quality.results": used("Publishes the pipeline's event log to a table.", pages.eventLog),
   "operations.retries": used("The pipeline task's max_retries and retry interval.", pages.task),
-  "operations.timeout": used("The pipeline task's timeout_seconds.", pages.task),
+  "operations.timeout": used("The job's timeout_seconds.", pages.job),
   "operations.concurrency": used("The job's max_concurrent_runs and queue.", pages.job),
   "operations.alerts=failure": used(
     "The job's email and webhook failure alerts.",
@@ -130,6 +130,26 @@ export const viewIntent: Record<string, IntentUse> = {
       "A materialised view is recomputed on each update; keep history with a streaming table.",
   },
   "history=none": used("A materialised view keeps no more than its query gives.", pages.view),
+  ...Object.fromEntries(
+    [...intentPaths.audit!.map((value) => `audit=${value}`), "rescued"].map((key) => [
+      key,
+      {
+        use: "not-yet",
+        reason: "Planned: audit columns and rescued data are added by streaming tables over files.",
+      },
+    ]),
+  ),
+};
+
+/**
+ * `cluster_by` of a store method: `auto` and `none` are other names for
+ * `storage.clustering`; a column list stays a setting.
+ */
+export const clusterAlias: SettingAlias = {
+  values: {
+    auto: { storage: { clustering: "auto" } },
+    none: { storage: { clustering: "none" } },
+  },
 };
 
 /** The settings that are other names for intent: how rows are kept, their order, and deletions. */

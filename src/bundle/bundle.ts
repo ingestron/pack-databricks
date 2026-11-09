@@ -111,7 +111,7 @@ export function jobFile(model: ResolvedModel, tasks: Task[]): Data | undefined {
   return { resources: { jobs: { [names.job]: { ...job, ...jobAlerts(model) } } } };
 }
 
-/** A task of the job; a pipeline task also takes `pipelineTask`, its retries and timeout. */
+/** A task of the job; a pipeline task also takes `pipelineTask`, its retries. */
 function jobTask(task: Task, pipelineTask: Data): Data {
   return {
     task_key: task.key,

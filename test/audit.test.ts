@@ -1,6 +1,13 @@
 // Audit and rescued columns that the pack's own reading of files adds.
+import { memoryFiles } from "@ingestron/config";
+import { resolveDefinitions } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
+import { databricks } from "../src/index.js";
 import { fold, foldFailures, resolveAll, retail } from "./fold-helpers.js";
+
+function resolve(files: Record<string, string>) {
+  return resolveDefinitions(memoryFiles(files), { packs: [databricks], environment: "dev" });
+}
 
 /** The retail project whose standard gives the bronze layer the intent given. */
 function retailWithBronze(bronze: string): Record<string, string> {
@@ -47,7 +54,23 @@ describe("audit columns", () => {
     );
   });
 
-  it("adds nothing to a table that reads other tables", () => {
+  it("names the rescued column only once when the method's options name it", () => {
+    const files = retailWithBronze("rescued: true");
+    files["flows/shop.yaml"] = files["flows/shop.yaml"]!.replace(
+      "options: { header: true }",
+      "options: { header: true, rescuedDataColumn: _bad_rows }",
+    );
+    const customers = folded(files)["src/retail/bronze/customers.sql"]!;
+    expect(customers.match(/rescuedDataColumn/g)).toHaveLength(1);
+    expect(customers).toContain("rescuedDataColumn => '_bad_rows'");
+  });
+});
+
+describe("a materialised view", () => {
+  const planned =
+    "Planned: audit columns and rescued data are added by streaming tables over files.";
+
+  it("adds no audit column to a table that reads other tables, and says so", () => {
     const both = retailWithBronze("audit: [loaded_at]");
     both["standard.yaml"] = both["standard.yaml"]!.replace(
       "  - silver\n",
@@ -56,5 +79,27 @@ describe("audit columns", () => {
     const files = folded(both);
     expect(files["src/retail/bronze/customers.sql"]).toContain("_loaded_at");
     expect(files["src/retail/silver/daily_sales.sql"]).not.toContain("_loaded_at");
+    const applied = resolve(both).diagnostics.filter((item) => item.code === "NOT_APPLIED");
+    expect(applied.map((item) => item.message)).toEqual([
+      expect.stringContaining(`audit: loaded_at isn't applied on databricks: ${planned}`),
+    ]);
+  });
+
+  it("adds no audit or rescued column over files either, and says so", () => {
+    const view = retailWithBronze("audit: [loaded_at], rescued: true");
+    view["flows/shop.yaml"] = view["flows/shop.yaml"]!.replace(
+      "source: shop\n",
+      "source: shop\nstore: { uses: materialised-view }\n",
+    ).replace(/ {4}store:\n {6}with:.*\n/, "");
+    const files = folded(view);
+    const customers = files["src/retail/bronze/customers.sql"]!;
+    expect(customers).toContain("CREATE OR REFRESH MATERIALIZED VIEW");
+    expect(customers).not.toContain("_loaded_at");
+    expect(customers).not.toContain("rescuedDataColumn");
+    const messages = resolve(view)
+      .diagnostics.filter((item) => item.code === "NOT_APPLIED")
+      .map((item) => item.message);
+    expect(messages).toContain(`audit: loaded_at isn't applied on databricks: ${planned}`);
+    expect(messages).toContain(`rescued: true isn't applied on databricks: ${planned}`);
   });
 });

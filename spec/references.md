@@ -122,11 +122,11 @@ BITEMPORAL` is Beta, so `history: bitemporal` is not used.
   `event_log: {catalog, schema, name}` publishes the log to a table, where the
   expectation metrics are (`quality.results`). No release label.
 - [Configure a task](https://docs.databricks.com/aws/en/jobs/configure-task):
-  `max_retries`, `min_retry_interval_millis` and `timeout_seconds` on a task
-  (`operations.retries`, `operations.timeout`). The page's default is no
-  retries.
+  `max_retries` and `min_retry_interval_millis` on a task
+  (`operations.retries`). The page's default is no retries.
 - [Configure a job](https://docs.databricks.com/aws/en/jobs/configure-job):
-  `max_concurrent_runs` and `queue` (`operations.concurrency`), and the run
+  `timeout_seconds` (`operations.timeout`), `max_concurrent_runs` and `queue`
+  (`operations.concurrency`), and the run
   duration threshold of a job's health rules, which the page labels Public
   Preview (`operations.alerts: slow`).
 - [Job notifications](https://docs.databricks.com/aws/en/jobs/notifications):

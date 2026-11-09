@@ -1,5 +1,5 @@
 // The standard's operations policy as job settings (spec/behaviour.md, section 2):
-// retries and a timeout on each pipeline task, and concurrency on the job.
+// retries on each pipeline task, and a timeout and concurrency on the job.
 import type { ResolvedModel } from "@ingestron/definitions";
 import type { Data } from "./bundle.js";
 
@@ -15,21 +15,27 @@ export function seconds(duration: string): number {
   return Number(duration.slice(0, -1)) * unitSeconds[unit]!;
 }
 
-/** What a pipeline task of the refresh job takes: its retries and timeout. */
+/** What a pipeline task of the refresh job takes: its retries. */
 export function taskOperations(model: ResolvedModel): Data {
-  const { retries, timeout } = model.operations;
+  const { retries } = model.operations;
+  if (!retries) return {};
   return {
-    ...(retries && {
-      max_retries: retries.count,
-      min_retry_interval_millis: seconds(retries.interval) * 1000,
-    }),
-    ...(timeout && { timeout_seconds: seconds(timeout) }),
+    max_retries: retries.count,
+    min_retry_interval_millis: seconds(retries.interval) * 1000,
   };
 }
 
-/** What the refresh job takes: how many runs at once, and whether one more waits. */
+/**
+ * What the refresh job takes: how long a run may take, how many runs at once, and
+ * whether one more waits.
+ */
 export function jobOperations(model: ResolvedModel): Data {
-  const { concurrency } = model.operations;
-  if (!concurrency) return {};
-  return { max_concurrent_runs: concurrency.max_runs, queue: { enabled: concurrency.queue } };
+  const { concurrency, timeout } = model.operations;
+  return {
+    ...(timeout && { timeout_seconds: seconds(timeout) }),
+    ...(concurrency && {
+      max_concurrent_runs: concurrency.max_runs,
+      queue: { enabled: concurrency.queue },
+    }),
+  };
 }

@@ -84,9 +84,9 @@ What `build` writes, which the folded bundle also follows:
 - **Operations.** The standard's operations policy (the model's `operations`)
   sets, only for what it gives: on each pipeline task of the refresh job (the
   refresh and each ingestion task, not the after-refresh task) `max_retries`
-  and `min_retry_interval_millis` from `retries`, and `timeout_seconds` from
-  `timeout`; on the job `max_concurrent_runs` and `queue: { enabled }` from
-  `concurrency`. A duration (`30s`, `5m`, `2h`, `1d`) is written in seconds,
+  and `min_retry_interval_millis` from `retries`; on the job `timeout_seconds`
+  from `timeout`, how long a run may take, and `max_concurrent_runs` and
+  `queue: { enabled }` from `concurrency`. A duration (`30s`, `5m`, `2h`, `1d`) is written in seconds,
   and the retry interval in milliseconds.
 - **Alerts.** Each of the Platform's alerts (definitions adds
   `notifications.on_failure` as an email alert) is raised for each event in
@@ -110,9 +110,10 @@ What `build` writes, which the folded bundle also follows:
   pipeline that builds the tables and each Lakeflow Connect ingestion pipeline
   have `event_log: { catalog, schema, name: <pipeline>_event_log }`, in the
   pipeline's own catalog and schema. A gateway has none.
-- **Audit and rescued columns.** Where a table's SQL reads files with
-  `read_files` (a streaming table, the changes table of a change-data table,
-  or a materialised view over files), it selects after the columns read, in
+- **Audit and rescued columns.** Only a streaming table that reads files with
+  `read_files` adds them (the changes table of a change-data table included);
+  a materialised view adds none, whether it reads files or other tables
+  (section 8.2). The streaming table selects after the columns read, in
   the order the table's intent gives them, `current_timestamp() AS <as>` for
   `audit: loaded_at`, `_metadata.file_path AS <as>` for `source_file` and
   `_metadata.file_modification_time AS <as>` for `source_modified_at`.
@@ -120,7 +121,8 @@ What `build` writes, which the folded bundle also follows:
   not quoted. The other audit values are added by the step that lands the
   files and are among the columns read. `rescued: true` adds
   `rescuedDataColumn => '_rescued_data'` after `schemaEvolutionMode` and before
-  the method's own options. AUTO CDC keeps these columns: its
+  the method's own options, unless those options name `rescuedDataColumn`
+  (in any case), whose column is then used. AUTO CDC keeps these columns: its
   `COLUMNS * EXCEPT (…)` leaves out only `except_columns`.
 - **Platform fields.** The pack lists as `platformFields` every Platform
   setting it reads: `mode`; `workspace.host` and `workspace.root_path`;
@@ -475,19 +477,19 @@ does with each value. The sources of the Databricks features are in
 | `sequence`                              | AUTO CDC `SEQUENCE BY`                                                      | used      |
 | `load.deletes.when`                     | AUTO CDC `APPLY AS DELETE WHEN`                                             | used      |
 | `load.deletes.mode`, `load.cursor`      | `deletion_condition`, `cursor_columns`                                      | not yet   |
-| `audit: loaded_at`                      | `current_timestamp()`                                                       | used      |
-| `audit: source_file`                    | `_metadata.file_path`                                                       | used      |
-| `audit: source_modified_at`             | `_metadata.file_modification_time`                                          | used      |
+| `audit: loaded_at`                      | `current_timestamp()`, in a streaming table over files                      | used      |
+| `audit: source_file`                    | `_metadata.file_path`, in a streaming table over files                      | used      |
+| `audit: source_modified_at`             | `_metadata.file_modification_time`, in a streaming table over files         | used      |
 | `audit: run_id`, `window_*`, `source_*` | Added by the step that lands the files                                      | elsewhere |
 | `audit: row_hash`                       | A hash column                                                               | not yet   |
-| `rescued`                               | The `_rescued_data` column of `read_files`                                  | used      |
+| `rescued`                               | The `_rescued_data` column of `read_files`, in a streaming table            | used      |
 | `storage.clustering: auto`, `none`      | `CLUSTER BY AUTO`; no `CLUSTER BY`                                          | used      |
 | `storage.clustering: keys`, `features`  | `CLUSTER BY (…)`; table properties                                          | not yet   |
 | `retention.time_travel`, `log`          | `delta.deletedFileRetentionDuration`, `delta.logRetentionDuration`          | not yet   |
 | `retention.landed_files`                | Kept by the landing pack                                                    | elsewhere |
 | `quality.results`                       | The pipeline's `event_log`, published to a table                            | used      |
 | `operations.retries`                    | The pipeline task's `max_retries` and `min_retry_interval_millis`           | used      |
-| `operations.timeout`                    | The pipeline task's `timeout_seconds`                                       | used      |
+| `operations.timeout`                    | The job's `timeout_seconds`                                                 | used      |
 | `operations.concurrency`                | The job's `max_concurrent_runs` and `queue`                                 | used      |
 | `operations.alerts: failure`            | The job's `email_notifications` and `webhook_notifications`; pipeline email | used      |
 | `operations.alerts: slow`               | The job's `health` rule and duration warning notifications (Public Preview) | used      |
@@ -518,7 +520,9 @@ A method declares only what differs from the pack:
 
 - `materialised-view`: `history: latest` and `history: full` are
   `not-applicable` ("A materialised view is recomputed on each update; keep
-  history with a streaming table."); `history: none` is used;
+  history with a streaming table."); `history: none` is used; every `audit`
+  value and `rescued` are `not-yet` ("Planned: audit columns and rescued data
+  are added by streaming tables over files.");
 - `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
   ingestion reads the source, not files."); `history: none`, `latest` and `full`
   are used, as the connector's append mode and `scd_type`; `rescued` is
@@ -533,16 +537,23 @@ whose status is preview when the standard says `features: ga`.
 
 ### 8.3 Aliases and defaults
 
-The `mode`, `sequence_by` and `delete_when` settings of `streaming-table` are
-other names for intent, and `mode` of `lakeflow-connect` is the same alias:
+The `mode`, `sequence_by`, `delete_when` and `cluster_by` settings of
+`streaming-table` are other names for intent, `cluster_by` of
+`materialised-view` is too, and `mode` of `lakeflow-connect` is the same alias
+as `streaming-table`'s:
 
-| Setting         | Intent              |
-| --------------- | ------------------- |
-| `mode: append`  | `history: none`     |
-| `mode: upsert`  | `history: latest`   |
-| `mode: history` | `history: full`     |
-| `sequence_by`   | `sequence`          |
-| `delete_when`   | `load.deletes.when` |
+| Setting            | Intent                     |
+| ------------------ | -------------------------- |
+| `mode: append`     | `history: none`            |
+| `mode: upsert`     | `history: latest`          |
+| `mode: history`    | `history: full`            |
+| `sequence_by`      | `sequence`                 |
+| `delete_when`      | `load.deletes.when`        |
+| `cluster_by: auto` | `storage.clustering: auto` |
+| `cluster_by: none` | `storage.clustering: none` |
+
+A `cluster_by` list of columns stays a setting the alias does not map, so
+`storage.clustering: none` in the standard gives a table no `CLUSTER BY`.
 
 A table built from the intent gives the files a table built from the setting
 gives. The methods fill in intent that nothing declares: `streaming-table`

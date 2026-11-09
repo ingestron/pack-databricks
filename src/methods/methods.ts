@@ -2,7 +2,7 @@
 // its settings schema, and checks that need the whole table.
 import type { Method, ResolvedTable } from "@ingestron/definitions";
 import { renderQuery } from "../sql/index.js";
-import { changeAliases, filesIntent, viewIntent } from "./intent.js";
+import { changeAliases, clusterAlias, filesIntent, viewIntent } from "./intent.js";
 
 const clusterBy = {
   description: "How the table is clustered: auto, none, or a list of columns.",
@@ -99,7 +99,7 @@ export const streamingTable: Method = {
   produces: "table",
   defaults: { mode: "append", cluster_by: "auto", properties: {}, changes_suffix: "_changes" },
   intentDefaults: { history: "none" },
-  aliases: changeAliases,
+  aliases: { ...changeAliases, cluster_by: clusterAlias },
   placement: storePlacement,
   settings: {
     type: "object",
@@ -150,6 +150,7 @@ export const materialisedView: Method = {
   produces: "table",
   defaults: { cluster_by: "auto", properties: {} },
   intent: viewIntent,
+  aliases: { cluster_by: clusterAlias },
   placement: storePlacement,
   settings: {
     type: "object",
