@@ -17,6 +17,7 @@ import { pyspark } from "./methods/index.js";
  * @example
  * const result = loadDefinitions("definitions", { packs: [databricks], environment: "dev" });
  * if (result.model) console.log(Object.keys(databricks.build(result.model)));
+ * @public
  */
 export const databricks: Pack = {
   id: "databricks",
