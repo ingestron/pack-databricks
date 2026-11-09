@@ -163,3 +163,69 @@ Accessed 2026-11-05. A new project's README.md shows these beside each value
   Connections, lists a workspace's Unity Catalog connections.
 - [Work with files in Unity Catalog volumes](https://docs.databricks.com/aws/en/volumes/volume-files):
   a volume's files are at `/Volumes/<catalog>/<schema>/<volume>/…`.
+
+Accessed 2026-11-10. The `find` of each field of the Platform's `databricks`
+section, which the editor shows on a `REPLACE_ME` beside the field's
+description and `suggest`:
+
+- [Declarative Automation Bundles deployment modes](https://docs.databricks.com/aws/en/dev-tools/bundles/deployment-modes):
+  development mode for pre-production validation, production mode for
+  validated deliverables (`mode`).
+- [Get identifiers for workspace objects](https://docs.databricks.com/aws/en/workspace/workspace-details)
+  and its Azure page,
+  [Get identifiers for workspace objects](https://learn.microsoft.com/en-us/azure/databricks/workspace/workspace-details):
+  the instance name is the first part of the URL you sign in at; on Azure the
+  per-workspace URL is `adb-<workspace-id>.<random-number>.azuredatabricks.net`,
+  also in the workspace's URL field in the Azure portal (`workspace.host`).
+- [Configuration reference](https://docs.databricks.com/aws/en/dev-tools/bundles/reference):
+  without `root_path`, a bundle deploys to
+  `.bundle/${bundle.name}/${bundle.target}` in the deploying user's own
+  workspace folder, named by `${workspace.current_user.userName}`
+  (`workspace.root_path`); `run_as.service_principal_name` is the application
+  ID of an active service principal and `run_as.user_name` the email of an
+  active workspace user.
+- [Specify a run identity](https://docs.databricks.com/aws/en/dev-tools/bundles/run-as):
+  a service principal is given by its application ID, found on its page in the
+  workspace admin settings, and a service principal is the most secure
+  `run_as` for production.
+- [Manage service principals](https://docs.databricks.com/aws/en/admin/users-groups/manage-service-principals),
+  [Manage Databricks users](https://docs.databricks.com/aws/en/admin/users-groups/users)
+  and [Manage Databricks groups](https://docs.databricks.com/aws/en/admin/users-groups/manage-groups):
+  Settings, then Identity and access, then Manage next to Service principals,
+  Users or Groups; a user is added by email address (`run_as`,
+  `permissions.*`).
+- [Authorize service principal access with OAuth](https://docs.databricks.com/aws/en/dev-tools/auth/oauth-m2m):
+  "The client ID is the same as the service principal's application ID."
+- [Configure a serverless pipeline](https://docs.databricks.com/aws/en/ldp/serverless):
+  serverless pipelines need Unity Catalog, a serverless-enabled region and the
+  serverless terms of use, and are the default for new pipelines
+  (`compute.serverless`). Serverless usage policies are Public Preview there.
+- [Attribute usage with serverless usage policies](https://docs.databricks.com/aws/en/admin/usage/budget-policies)
+  and its [Azure page](https://learn.microsoft.com/en-us/azure/databricks/admin/usage/budget-policies):
+  Settings, then Compute, then Manage next to Serverless usage policies lists
+  the policies (`compute.budget_policy_id`). Public Preview. Neither page
+  says where a policy's ID is shown, so the `find` names the list only.
+- [Configure pipelines](https://docs.databricks.com/aws/en/ldp/configure-pipeline):
+  new pipelines use the Current channel; the Preview channel tests a pipeline
+  against pending runtime changes (`compute.channel`).
+- [Set permissions for resources in bundles](https://docs.databricks.com/aws/en/dev-tools/bundles/permissions):
+  the top-level levels are `CAN_VIEW`, `CAN_MANAGE` and `CAN_RUN`, for a
+  `user_name`, `group_name` or `service_principal_name` (`permissions.*.level`).
+- [What is Catalog Explorer?](https://docs.databricks.com/aws/en/catalog-explorer/):
+  Catalog in the sidebar opens it (`manage.schemas`).
+- [Unity Catalog privileges reference](https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/privileges):
+  `CREATE SCHEMA` with `USE CATALOG` creates a schema in a catalog
+  (`manage.schemas`); `SELECT` reads a table (`manage.checks`); the privileges
+  a grant lists (`grants.*.*.privileges`).
+- [Bundle resources](https://docs.databricks.com/aws/en/dev-tools/bundles/resources):
+  a bundle's grants write privileges with underscores, such as `USE_CATALOG`
+  and `CREATE_SCHEMA` (`grants.*.*.privileges`).
+- [Manage privileges in Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/):
+  an object's Permissions tab in Catalog Explorer; a principal is a user (by
+  email address), a service principal (by application ID) or a group (by name)
+  (`grants.*.*.principal`).
+- [Apply tags to Unity Catalog securable objects](https://docs.databricks.com/aws/en/database-objects/tags):
+  tagging needs ownership, or `APPLY TAG` with `USE SCHEMA` and `USE CATALOG`,
+  and `ASSIGN` on a governed tag (`manage.tags`).
+- [COMMENT ON](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-comment):
+  a comment on a table's column needs `MODIFY` on the table (`manage.comments`).
