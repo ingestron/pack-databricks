@@ -77,6 +77,11 @@ export const intent: Record<string, IntentUse> = {
     "The job's email and webhook failure alerts.",
     pages.notifications,
   ),
+  "operations.schedule=project": used(
+    "One refresh job for the project, on the Platform's schedule.",
+    pages.job,
+  ),
+  "operations.schedule=flow": notYet,
   // Duration thresholds are Public Preview on the configure-job page.
   "operations.alerts=slow": used(
     "A run duration health rule and warning alert.",
@@ -119,6 +124,11 @@ export const connectIntent: Record<string, IntentUse> = {
 
 /** What differs for a materialised view, which is recomputed on each update. */
 export const viewIntent: Record<string, IntentUse> = {
+  "load.deletes": {
+    use: "not-applicable",
+    reason:
+      "A materialised view is recomputed; a delete condition needs a streaming table with history.",
+  },
   "history=latest": {
     use: "not-applicable",
     reason:

@@ -494,6 +494,8 @@ does with each value. The sources of the Databricks features are in
 | `operations.alerts: failure`            | The job's `email_notifications` and `webhook_notifications`; pipeline email | used      |
 | `operations.alerts: slow`               | The job's `health` rule and duration warning notifications (Public Preview) | used      |
 | `operations.trigger`                    | File arrival, table update and continuous triggers                          | not yet   |
+| `operations.schedule: project`          | One refresh job for the project, on the Platform's schedule                 | used      |
+| `operations.schedule: flow`             | A refresh job for each flow                                                 | not yet   |
 
 Every `used` feature is generally available on the page the pack checked on
 2026-11-09 (references.md), except the run duration threshold behind
@@ -522,7 +524,9 @@ A method declares only what differs from the pack:
   `not-applicable` ("A materialised view is recomputed on each update; keep
   history with a streaming table."); `history: none` is used; every `audit`
   value and `rescued` are `not-yet` ("Planned: audit columns and rescued data
-  are added by streaming tables over files.");
+  are added by streaming tables over files."); `load.deletes` is
+  `not-applicable` ("A materialised view is recomputed; a delete condition
+  needs a streaming table with history.");
 - `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
   ingestion reads the source, not files."); `history: none`, `latest` and `full`
   are used, as the connector's append mode and `scd_type`; `rescued` is
@@ -530,6 +534,15 @@ A method declares only what differs from the pack:
   `audit: loaded_at`, `source_file` and `source_modified_at` ("Managed
   ingestion writes the table; it adds no metadata columns."); and
   `storage.clustering` is `not-yet` ("Planned.").
+
+The step that writes the table judges `load.deletes` (definitions
+specification, section 11.5): the store step, or `lakeflow-connect`, which
+writes the table itself. A `streaming-table` keeps `load.deletes.when` as
+`used`, but a delete condition declared as intent (not the `delete_when`
+setting) on a table whose history is `none` is a problem of the table: `a
+delete condition needs history latest or full`, since an appending table
+applies no deletes. The `delete_when` setting with `mode: append` builds what
+it built before intent existed.
 
 The definitions package reports `NOT_APPLIED` for a value the judging method
 declares `not-yet` or `not-applicable`, and `PREVIEW_FEATURE` for a `used` value

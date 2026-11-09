@@ -172,7 +172,18 @@ export const sql: Method = {
   },
 };
 
+/**
+ * True when the table declares a delete condition as intent, not through `delete_when`, but
+ * keeps no history: an appending table applies no deletes.
+ */
+function deletesWithoutHistory(table: ResolvedTable): boolean {
+  const origin = table.intentOrigins["load.deletes.when"];
+  const declared = origin !== undefined && origin.layer !== "pack" && origin.alias === undefined;
+  return declared && table.intent.history === "none";
+}
+
 function checkChangeData(table: ResolvedTable): string[] {
+  if (deletesWithoutHistory(table)) return ["a delete condition needs history latest or full"];
   const settings = table.store?.settings ?? {};
   if (settings.mode === "append") return [];
   const problems: string[] = [];

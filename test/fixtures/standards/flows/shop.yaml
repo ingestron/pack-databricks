@@ -7,8 +7,12 @@ tables:
   orders:
     object: orders
     contract: shop.orders
+    # The latest row per key, ordered by updated_at, with deleted rows removed.
+    history: latest
+    sequence: updated_at
+    load: { deletes: { when: "op = 'D'" } }
     store:
-      with: { mode: upsert, sequence_by: updated_at, delete_when: "op = 'D'", except_columns: [op] }
+      with: { except_columns: [op] }
     expectations:
       - { name: positive_total, check: total >= 0 }
   customers:

@@ -70,6 +70,42 @@ describe("the Platform's databricks section", () => {
   });
 });
 
+describe("capabilities in the databricks section", () => {
+  // A unique, tagged column: table checks and tags, with grants on the managed schemas.
+  const contract = retail["contracts/customers.yaml"]!.replace(
+    "{ name: email, logicalType: string, required: true }",
+    "{ name: email, logicalType: string, required: true, unique: true, tags: [pii] }",
+  );
+  const manage = "manage: { checks: true, tags: true, schemas: true }";
+  const grants = "grants:\n  bronze: [{ principal: sales-analysts, privileges: [SELECT] }]";
+  const indented = (text: string) => text.replace(/^/gm, "  ");
+  const top: Record<string, string> = { ...retail, "contracts/customers.yaml": contract };
+  top["platform.yaml"] = `${retail["platform.yaml"]}${manage}\n${grants}\n`;
+  const section = { ...top };
+  section["platform.yaml"] =
+    `${retail["platform.yaml"]}databricks:\n${indented(manage)}\n${indented(grants)}\n`;
+  const built = (files: Record<string, string>) => fold(resolveAll(files, ["dev", "prod"])).files;
+  const turnedOff = (files: Record<string, string>) =>
+    resolve(files)
+      .diagnostics.filter((item) => item.code === "CAPABILITY_OFF")
+      .map((item) => item.message);
+
+  it("builds every file as manage and grants at the top do", () => {
+    expect(contract).toContain("unique: true");
+    const files = built(section);
+    expect(Object.keys(files)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/apply_contract\.py$/)]),
+    );
+    expect(Object.keys(files).some((path) => path.startsWith("prerequisites/"))).toBe(true);
+    expect(files).toEqual(built(top));
+  });
+
+  it("reports no capability off for either", () => {
+    expect(turnedOff(top)).toEqual([]);
+    expect(turnedOff(section)).toEqual([]);
+  });
+});
+
 describe("folding with the new model fields", () => {
   /** The retail Platform with its Databricks fields in their section. */
   const moved = {
