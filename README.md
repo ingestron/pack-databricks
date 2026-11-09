@@ -118,6 +118,40 @@ The after-refresh task (tags, column comments and table checks) is
 `tasks/<pipeline>/apply_contract.py`, outside the pipeline's `src/<pipeline>/`
 sources, so that only the refresh job runs it.
 
+## What changed in 2.3
+
+The pack reads the standard's intent: what a table keeps and how its data is
+loaded, such as `history: latest`, written once for every engine. A project
+that declares no intent gets the same files as with 2.2.
+
+- Settings that are now other names for intent still work and build the same
+  files, but each is a `SETTING_MOVED` warning with the fix `Write as intent`:
+  - `mode` of `streaming-table` and `lakeflow-connect`: `append` is
+    `history: none`, `upsert` is `history: latest`, `history` is
+    `history: full`;
+  - `sequence_by` of `streaming-table` is `sequence`, and `delete_when` is
+    `load.deletes.when`;
+  - `cluster_by: auto` and `cluster_by: none` of `streaming-table` and
+    `materialised-view` are `storage.clustering: auto` and `none`. A list of
+    columns stays a setting.
+- The Platform has a `databricks` section. `mode`, `workspace`, `run_as`,
+  `compute`, `permissions`, `manage` and `grants` written at the top of the
+  Platform still work, and each is a `PLATFORM_FIELD_MOVED` warning with the
+  fix `Move to databricks.<field>`. `notifications.on_failure` is the same
+  warning, with the fix `Move to alerts`, which writes
+  `alerts: [{ kind: email, to: [...], on: [failure] }]`. The section also takes
+  `warehouse_id`.
+- New output appears only where the project declares it:
+  - the standard's `operations`: retries on each pipeline task, the job's
+    timeout, and its concurrency and queueing;
+  - the Platform's `alerts`: email and webhook alerts on failure, and, with the
+    standard's `operations.alerts.slow_after`, a run duration rule (Public
+    Preview);
+  - `quality.results`: each pipeline's event log, published to a table;
+  - `audit` and `rescued`: load time, file path and modification time columns,
+    and `_rescued_data`, in streaming tables that read files.
+- Needs `@ingestron/definitions` 1.13 or later.
+
 ## What changed in 2.0
 
 - One bundle in `build/databricks/` for every environment, in place of a
