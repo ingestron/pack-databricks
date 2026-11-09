@@ -162,7 +162,10 @@ Accessed 2026-11-05. A new project's README.md shows these beside each value
   in Catalog Explorer, the gear icon at the top of the Catalog pane, then
   Connections, lists a workspace's Unity Catalog connections.
 - [Work with files in Unity Catalog volumes](https://docs.databricks.com/aws/en/volumes/volume-files):
-  a volume's files are at `/Volumes/<catalog>/<schema>/<volume>/…`.
+  a volume's files are at `/Volumes/<catalog>/<schema>/<volume>/…`. The files
+  connector's `path` suggests `/Volumes/<catalog>/<schema>/<volume>`; a Unity
+  Catalog connection's suggests `<connection name>`, the name the Connections
+  list shows.
 
 Accessed 2026-11-10. The `find` of each field of the Platform's `databricks`
 section, which the editor shows on a `REPLACE_ME` beside the field's

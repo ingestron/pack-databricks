@@ -15,6 +15,19 @@ import { databricks } from "../src/index.js";
  */
 const filledIn: string[] = [];
 
+/**
+ * The connector settings a project is given as REPLACE_ME, as `<connector>.<setting>`: the
+ * Databricks kit's connection (files) and the starters' and `ingestron init`'s connections
+ * (files, and the Unity Catalog connection of each Lakeflow Connect source).
+ */
+const connectors = databricks.connectors ?? [];
+const connectorFilledIn = [
+  "files.path",
+  "sqlserver.uc_connection",
+  "salesforce.uc_connection",
+  "kafka.uc_connection",
+];
+
 /** The fields that hold a value: those with no field below them. */
 function leaves(fields: FieldInfo[]): FieldInfo[] {
   const paths = fields.map((field) => field.path.join("."));
@@ -59,5 +72,24 @@ describe("find and suggest", () => {
       return { name, field: field! };
     });
     expect(lacking(fields)).toEqual([]);
+  });
+
+  it("are given for every connector setting a project fills in", () => {
+    const absent = connectorFilledIn.flatMap((name) => {
+      const [id, setting] = name.split(".");
+      const found = connectors
+        .find((connector) => connector.id === id)
+        ?.settings.find((item) => item.name === setting);
+      expect(found, `${name} is a connector setting of the pack`).toBeDefined();
+      const lacks = (["description", "find", "suggest"] as const).filter((key) => !found?.[key]);
+      return lacks.length > 0 ? [`${name}: ${lacks.join(", ")}`] : [];
+    });
+    expect(absent).toEqual([]);
+  });
+
+  it("suggests a volume's path for the files connector, as find describes it", () => {
+    const path = connectors.find((connector) => connector.id === "files")?.settings[0];
+    expect(path?.suggest).toBe("/Volumes/<catalog>/<schema>/<volume>");
+    expect(path?.find).toContain(path?.suggest);
   });
 });
