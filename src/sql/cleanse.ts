@@ -108,17 +108,21 @@ export function qualifyOf(table: ResolvedTable): string {
 }
 
 /**
- * A transform's query, cleansed and deduplicated: wrapped in a `SELECT` that cleanses
- * each column, then in one that keeps a row per key. The query as it is when the table
+ * A transform's query, cleansed and deduplicated: wrapped in a `SELECT` that names the
+ * contract's columns in its order, each cleansed one as its expression, then the query's
+ * other columns; then in one that keeps a row per key. The query as it is when the table
  * has no cleansing.
  */
 export function cleansedQuery(table: ResolvedTable, query: string): string {
   if (!table.cleanse) return query;
-  const columns = cleansedByName(table);
-  if (columns.length === 0) return deduplicated(table, query, "source");
-  const names = columns.map(({ name }) => quoteName(name)).join(", ");
-  const selected = columns.map(({ name, expression }) => `${expression} AS ${quoteName(name)}`);
-  const cleansed = `SELECT * EXCEPT (${names}), ${selected.join(", ")}\nFROM (\n${query}\n) AS source`;
+  if (cleansedByName(table).length === 0) return deduplicated(table, query, "source");
+  const names = table.contract.columns.map((column) => quoteName(column.name));
+  const selected = table.contract.columns.map((column, at) => {
+    const expression = cleansedColumn(table, column, names[at]!);
+    return expression === undefined ? names[at]! : `${expression} AS ${names[at]!}`;
+  });
+  const list = [...selected, `* EXCEPT (${names.join(", ")})`].join(", ");
+  const cleansed = `SELECT ${list}\nFROM (\n${query}\n) AS source`;
   return deduplicated(table, cleansed, "cleansed");
 }
 

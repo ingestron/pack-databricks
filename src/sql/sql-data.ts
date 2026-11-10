@@ -109,33 +109,55 @@ function textTimestamps(table: ResolvedTable): string[] {
 
 /**
  * `*`, or `* EXCEPT (<source names>), <source> AS <name>, …` for renamed
- * columns, `CAST(<name> AS TIMESTAMP) AS <name>` for timestamps written as text,
- * and `<expression> AS <name>` for the other cleansed columns. A renamed column that is
- * cleansed is read from its source name and selected once, cleansed.
+ * columns and `CAST(<name> AS TIMESTAMP) AS <name>` for timestamps written as text. A table
+ * that cleanses a column names the contract's columns first, in its order (see
+ * `inContractOrder`), then the other columns read, then the text timestamps.
  */
 function selectOf(table: ResolvedTable): string {
   const renamed = renamedColumns(table);
   const timestamps = textTimestamps(table);
-  const cleansed = table.contract.columns.flatMap((column) => {
-    if (renamed.includes(column)) return [];
-    const expression = cleansedColumn(table, column, quoteName(column.name));
-    return expression ? [{ column, expression }] : [];
-  });
-  if (renamed.length === 0 && timestamps.length === 0 && cleansed.length === 0) return "*";
+  const casts = timestamps.map(
+    (name) => `CAST(${quoteName(name)} AS TIMESTAMP) AS ${quoteName(name)}`,
+  );
+  const cleanses = table.contract.columns.some(
+    (column) => cleansedColumn(table, column, quoteName(column.name)) !== undefined,
+  );
+  if (cleanses) return inContractOrder(table, renamed, timestamps.map(quoteName), casts);
+  if (renamed.length === 0 && timestamps.length === 0) return "*";
   const sources = [
     ...renamed.map((column) => quoteName(column.physicalName!)),
     ...timestamps.map(quoteName),
-    ...cleansed.map(({ column }) => quoteName(column.name)),
   ];
   const aliases = [
-    ...renamed.map((column) => {
-      const source = quoteName(column.physicalName!);
-      return `${cleansedColumn(table, column, source) ?? source} AS ${quoteName(column.name)}`;
-    }),
-    ...timestamps.map((name) => `CAST(${quoteName(name)} AS TIMESTAMP) AS ${quoteName(name)}`),
-    ...cleansed.map(({ column, expression }) => `${expression} AS ${quoteName(column.name)}`),
+    ...renamed.map((column) => `${quoteName(column.physicalName!)} AS ${quoteName(column.name)}`),
+    ...casts,
   ];
   return `* EXCEPT (${sources.join(", ")}), ${aliases.join(", ")}`;
+}
+
+/**
+ * The contract's columns in its order, as the DuckDB and Synapse packs select them: a cleansed
+ * one as `<expression> AS <name>`, a renamed one read from its source name (cleansed from it
+ * when it is cleansed too), any other as itself; then `* EXCEPT (…)` for the other columns
+ * read, leaving out `others`; then `after`.
+ */
+function inContractOrder(
+  table: ResolvedTable,
+  renamed: Column[],
+  others: string[],
+  after: string[],
+): string {
+  const read = (column: Column) =>
+    quoteName(renamed.includes(column) ? column.physicalName! : column.name);
+  const columns = table.contract.columns.map((column) => {
+    const source = read(column);
+    const selected = cleansedColumn(table, column, source) ?? source;
+    return selected === quoteName(column.name)
+      ? selected
+      : `${selected} AS ${quoteName(column.name)}`;
+  });
+  const except = [...table.contract.columns.map(read), ...others];
+  return [...columns, `* EXCEPT (${except.join(", ")})`, ...after].join(", ");
 }
 
 /** The connection's `path` joined with the table's object. */

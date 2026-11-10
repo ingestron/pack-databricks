@@ -7,9 +7,16 @@ import { asView, built, modelOf, quality, shopWith, withStatus } from "./quality
 describe("cleansing", () => {
   it("wraps a transform's query and cleanses each column in the model's order of operations", () => {
     const sql = built(quality)["src/crm/silver/customers_clean.sql"]!;
-    const select = sql.slice(sql.indexOf("FROM (\nSELECT * EXCEPT"), sql.indexOf(") AS source"));
+    const select = sql.slice(sql.indexOf("FROM (\nSELECT `id`, "), sql.indexOf(") AS source"));
+    // The contract's columns in its order, cleansed or not, then the query's other columns.
     expect(select).toContain(
-      "FROM (\nSELECT * EXCEPT (`email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `score`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`), ",
+      "FROM (\nSELECT `id`, lower(nullif(trim(`email`), '')) AS `email`, nullif(`name`, '') AS `name`, upper(",
+    );
+    expect(select).toContain(
+      ", nullif(trim(`code`), '') AS `code`, `age`, CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`, `tags`, coalesce(`vip`, FALSE) AS `vip`, ",
+    );
+    expect(select).toContain(
+      " AS `updated_at`, * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)\nFROM (",
     );
     for (const expression of [
       "lower(nullif(trim(`email`), '')) AS `email`",
@@ -23,7 +30,7 @@ describe("cleansing", () => {
       "convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`",
     ])
       expect(select).toContain(expression);
-    expect(sql).toContain("AS\nSELECT *\nFROM (\nSELECT * EXCEPT (");
+    expect(sql).toContain("AS\nSELECT *\nFROM (\nSELECT `id`, ");
     expect(sql).toContain(
       "FROM (\nSELECT * FROM `bronze`.`customers`\n) AS source\n) AS cleansed\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
     );
@@ -43,7 +50,7 @@ describe("cleansing", () => {
     );
     const sql = built(files)["src/shop/bronze/orders.sql"]!;
     expect(sql).toContain(
-      "AS SELECT * EXCEPT (`state`, `note`), trim(`state`) AS `status`, coalesce(nullif(trim(`note`), ''), 'none') AS `note` FROM STREAM read_files(",
+      "AS SELECT `id`, `updated_at`, trim(`state`) AS `status`, coalesce(nullif(trim(`note`), ''), 'none') AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
     );
   });
 
@@ -55,7 +62,7 @@ describe("cleansing", () => {
     );
     const sql = built(files)["src/shop/bronze/orders.sql"]!;
     expect(sql).toContain(
-      "CREATE OR REFRESH STREAMING TABLE `bronze`.`orders_changes`\nAS SELECT * EXCEPT (`state`, `note`), trim(`state`) AS `status`, trim(`note`) AS `note` FROM STREAM read_files(",
+      "CREATE OR REFRESH STREAMING TABLE `bronze`.`orders_changes`\nAS SELECT `id`, `updated_at`, trim(`state`) AS `status`, trim(`note`) AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
     );
   });
 
@@ -68,7 +75,7 @@ describe("cleansing", () => {
     const model = modelOf(files);
     expect(model.tables[0]!.timezone).toBe("UTC");
     expect(databricks.build(model)["src/shop/bronze/orders.sql"]).toContain(
-      "AS SELECT * EXCEPT (`updated_at`), to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at` FROM STREAM read_files(",
+      "AS SELECT `id`, to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`, * EXCEPT (`id`, `updated_at`) FROM STREAM read_files(",
     );
   });
 

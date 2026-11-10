@@ -222,7 +222,10 @@ gives the date the page says it was last updated.
   (`CASE expr WHEN opt THEN res … ELSE def END`), `case` and `default`.
 - [Star clause](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-star)
   (updated 2026-09-11): `* EXCEPT (<columns>)`, from Databricks Runtime 11.3
-  LTS, which leaves out the columns a table selects again cleansed.
+  LTS, which leaves out the columns a table selects again cleansed. Read again
+  2026-11-11: "Each name must reference a column included in the set of
+  columns that you can reference", so a cleansed table names the contract's
+  columns first, in order, and the star after them adds only the others.
 - [`QUALIFY`](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-qualify)
   and
   [`row_number`](https://docs.databricks.com/aws/en/sql/language-manual/functions/row_number)

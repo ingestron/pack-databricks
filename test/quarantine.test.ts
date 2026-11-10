@@ -44,7 +44,7 @@ describe("quarantine", () => {
         "-- Every row as read, once: the table keeps those that pass its checks, and its",
         "-- quarantine those that a check with the action drop removes.",
         "CREATE OR REFRESH PRIVATE STREAMING TABLE `orders_checked`",
-        "AS SELECT * EXCEPT (`state`, `note`), trim(`state`) AS `status`, trim(`note`) AS `note` FROM STREAM read_files(",
+        "AS SELECT `id`, `updated_at`, trim(`state`) AS `status`, trim(`note`) AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
         "  '/Volumes/dev/landing/shop/orders',",
         "  format => 'parquet',",
         "  schemaHints => '`id` BIGINT, `updated_at` TIMESTAMP, `state` STRING, `note` STRING',",

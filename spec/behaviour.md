@@ -695,15 +695,20 @@ type is its contract `physicalType`, else the standard's type for its
 The expressions go in the `SELECT` that builds the table's rows:
 
 - **A table that reads files** (a streaming table, the changes table of a
-  change-data table, or a materialised view over `read_files`): the select
-  list is `* EXCEPT (<columns>), …` as for renamed columns (section 2), and
-  each cleansed column is `<expression> AS <c>` after the renamed columns and
-  text timestamps, in the contract's order. A renamed column that is cleansed
-  starts from its source name and is selected once, cleansed. Cleansed
-  columns therefore come after the others. A change-data table cleanses its
-  changes, so AUTO CDC keeps cleansed rows.
-- **A transform's materialised view** wraps the transform's query:
-  `SELECT * EXCEPT (<columns>), <expression> AS <c>, … FROM (<query>) AS source`,
+  change-data table, or a materialised view over `read_files`) and cleanses a
+  column: the select list names the contract's columns first, in the
+  contract's order, as the DuckDB and Synapse packs select them: a cleansed
+  column as `<expression> AS <c>`, a renamed one as `<source> AS <c>` (its
+  expression starting from its source name when it is cleansed too, so it is
+  selected once), and any other as `<c>`. Then come the other columns read,
+  `* EXCEPT (<the contract's columns as read>, <text timestamps>)`, then each
+  text timestamp as `CAST(<t> AS TIMESTAMP) AS <t>` (section 2). A table that
+  cleanses no column keeps the select list of section 2. A change-data table
+  cleanses its changes, so AUTO CDC keeps cleansed rows.
+- **A transform's materialised view** wraps the transform's query, its
+  contract's columns first, in the contract's order, then the query's other
+  columns:
+  `SELECT <c or expression AS c>, …, * EXCEPT (<the contract's columns>) FROM (<query>) AS source`,
   the query on lines of its own. On this pack a transform's table is always a
   materialised view, and a materialised view reads no `STREAM()`, so no
   wrapped query carries one; cleansing never goes in the transform's own
