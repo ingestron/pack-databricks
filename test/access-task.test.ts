@@ -7,7 +7,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /** The task's access functions, as the template writes them into the task. */
-const functions = readFileSync(join(import.meta.dirname, "../templates/access.liquid"), "utf8");
+const functions = ["quoted", "access"]
+  .map((name) => readFileSync(join(import.meta.dirname, `../templates/${name}.liquid`), "utf8"))
+  .join("\n");
 
 const python = spawnSync("python3", ["--version"], { encoding: "utf8" });
 const missing = python.error || python.status !== 0;
@@ -84,8 +86,9 @@ describe("the after-refresh task's access functions", () => {
       row("sales-ops", "MODIFY", "TABLE", name),
       // A principal no role names, granted directly.
       row("someone@example.com", "SELECT", "TABLE", name.toUpperCase()),
-      // A denial: kept.
+      // A denial, however it is spelt: kept.
       row("contractors", "DENY SELECT", "TABLE", name),
+      row("contractors", "DENIED_SELECT", "TABLE", name),
     ];
     const keep = ["data-stewards", "7f3c2a10-0000-4000-8000-000000000001"];
     expect(call("revokes", rows, item, keep)).toEqual([

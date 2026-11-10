@@ -26,6 +26,9 @@ What it uses on Databricks:
 - **Materialised views** for transforms, in SQL or PySpark.
 - **Serverless pipelines**, a scheduled refresh job, Unity Catalog schemas
   and grants when you ask for them, permissions, tags and notifications.
+- **Access**, when you turn it on: grants from the contracts' roles, and
+  column masks and row filters as Unity Catalog policies, which always let
+  `run_as` read real values.
 
 One bundle covers every environment, with a target per environment, as
 Databricks teams lay out bundles by hand. A value is a bundle variable only
@@ -118,7 +121,8 @@ case). A workspace host supplied this way is `DATABRICKS_HOST`.
 in that environment. It is not deployed, and neither are `.generated.json` and
 `.generated.lock`, which `ingestron` keeps in the folder.
 
-The after-refresh task (tags, column comments and table checks) is
+The after-refresh task (tags, column comments, grants, policies and table
+checks) is
 `tasks/<pipeline>/apply_contract.py`, outside the pipeline's `src/<pipeline>/`
 sources, so that only the refresh job runs it.
 
@@ -158,7 +162,10 @@ that declares no intent gets the same files as with 2.2.
   - `cleanse`: each column's operations in the table's `SELECT`, and
     `deduplicate` as `QUALIFY row_number() … = 1` in a materialised view;
   - `quality.quarantine`: a `<table>_quarantine` table of the rows a `drop`
-    check removes, with the failed checks' names in `_failed_checks`.
+    check removes, with the failed checks' names in `_failed_checks`;
+  - `databricks.manage.grants`, `masks` and `filters`: grants from the
+    contracts' roles and layers, and column mask and row filter policies, made
+    by the after-refresh task.
 - Lakeflow Connect writes the table as the source gives it. Checks, cleansing
   and deduplicate on such a table are `NOT_APPLIED` warnings that say to do
   them in a transform in the next layer. An expectation written on the flow

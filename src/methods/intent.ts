@@ -23,11 +23,16 @@ const pages = {
   notifications: "https://docs.databricks.com/aws/en/jobs/notifications",
 };
 
-/** The pages that give grants' release status, read on 2026-11-11. */
+/** The pages that give grants', masks' and row filters' release status, read on 2026-11-11. */
 const accessPages = {
   grant: "https://docs.databricks.com/aws/en/sql/language-manual/security-grant",
   revoke: "https://docs.databricks.com/aws/en/sql/language-manual/security-revoke",
+  policy: "https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-policy",
 };
+
+/** A column mask or row filter policy, made after each refresh; generally available. */
+const policy = (does: string) =>
+  used(`${does}, after each refresh.`, accessPages.policy, ga(accessPages.policy, "2026-11-11"));
 
 const ga = (source: string, checked = "2026-11-09"): FeatureStatus => ({
   level: "ga",
@@ -115,6 +120,11 @@ export const intent: Record<string, IntentUse> = {
     accessPages.revoke,
     ga(accessPages.revoke, "2026-11-11"),
   ),
+  "access.masks=null": policy("A column mask policy with the ingestron_mask_null function"),
+  "access.masks=hash": policy("A column mask policy with the ingestron_mask_hash function"),
+  "access.masks=redact": policy("A column mask policy with the ingestron_mask_redact function"),
+  "access.masks=function": policy("A column mask policy with the team's function"),
+  "access.filters=true": policy("A row filter policy with the team's function"),
 };
 
 /** Where the ingest step is the pack's own, the audit values that step adds are the pack's to build. */

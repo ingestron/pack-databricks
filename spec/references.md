@@ -370,6 +370,104 @@ never revoked as a stranger.
   `class.`, `sap.` and `ai.` are reserved for system tags. The two pages list
   different characters, so the pack refuses a key that either refuses.
 
+## Masks and row filters
+
+Accessed 2026-11-11. The sources of spec section 8.7, each with the date the
+page says it was last updated. None labels row filter or column mask policies
+on tables, streaming tables or materialised views as preview; the Beta labels
+are on policies on views, metastore-level policies and DENY policies, which
+the pack does not use. So the pack records `access.masks` and
+`access.filters` as generally available.
+
+- [CREATE POLICY](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-policy)
+  (updated 2026-10-29): `CREATE [ OR REPLACE ] POLICY policy_name ON { … |
+SCHEMA schema_name | TABLE table_name }`, then for a row filter
+  `ROW FILTER function_name TO principal [, ...] [ EXCEPT principal [, ...] ]
+FOR TABLES [ WHEN condition ] [ MATCH COLUMNS condition [ [ AS ] alias ] [, ...] ]
+[ USING COLUMNS ( function_arg [, ...] ) ]`, and for a column mask the same
+  with `COLUMN MASK function_name` and `ON COLUMN alias` before `USING
+COLUMNS`. "The policy name is scoped to the securable the policy is defined
+  on." Row filters and column masks need Databricks Runtime 16.4 or above;
+  making one needs `MANAGE` on the securable, or owning it. In `MATCH
+COLUMNS`, `has_tag()` and `has_tag_value()` "check tags set directly on the
+  column only".
+- [Create and manage row filter and column mask policies](https://docs.databricks.com/aws/en/data-governance/unity-catalog/abac/policies)
+  (updated 2026-10-15): a policy needs `MANAGE` on the securable or its
+  ownership, and `EXECUTE` on the function; `function_name` is "the fully
+  qualified name of the UDF"; `SHOW POLICIES` "to list the policies defined on
+  a securable object", whose example result has the column `policy_name`;
+  `DROP POLICY policy_name ON { … | SCHEMA | TABLE } securable_name`.
+- [SHOW POLICIES](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-aux-show-policies)
+  (updated 2026-10-29): `SHOW POLICIES ON { … | SCHEMA schema_name | TABLE
+table_name }` "lists only the policies directly associated with the target
+  securable" (`SHOW EFFECTIVE POLICIES` adds the inherited ones); it needs
+  `READ METADATA`, `MANAGE` or ownership. The task lists each place with
+  `SHOW POLICIES`, so it never sees, and never drops, a policy of a parent.
+  The page names the first column "Policy Name"; the policies page's example
+  shows it as `policy_name`, which is what the task reads. A row without it is
+  kept, so a different name drops nothing rather than the wrong policy.
+- [DROP POLICY](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-drop-policy)
+  (updated 2026-10-29): `DROP POLICY policy_name ON { … | SCHEMA schema_name |
+TABLE table_name }`, which needs `MANAGE` on the securable.
+- [Requirements, quotas, and limitations](https://docs.databricks.com/aws/en/data-governance/unity-catalog/abac/requirements)
+  (updated 2026-11-04): serverless compute, or standard or dedicated compute
+  on Databricks Runtime 16.4 or above, and "Standard and dedicated compute on
+  Databricks Runtime versions earlier than 16.4 can't access ABAC-secured
+  tables" (the request's line for readers). "ABAC policies use governed tags,
+  not ungoverned tags". At most 100 policies on a schema, 50 on a table and 20
+  principals in `TO` and in `EXCEPT`. "When a pipeline refreshes a materialized
+  view or streaming table, it evaluates policies using the pipeline owner's or
+  run-as identity. If that identity is subject to an ABAC policy, the
+  materialized view or streaming table permanently contains masked or filtered
+  data. To avoid this, add the pipeline owner or run-as identity to the EXCEPT
+  clause", which is why every policy exempts run_as. Its example policy is
+  ``TO `account users` EXCEPT `etl_service_principal` ``. "Only one distinct row
+  filter can resolve at runtime for a given table and a given user, and only
+  one distinct column mask … for a given column".
+- [Common patterns](https://docs.databricks.com/aws/en/data-governance/unity-catalog/abac/common-patterns)
+  (updated 2026-10-23): "When masking a column, return the same data type or a
+  type that is castable to it", and "A single masking UDF that accepts and
+  returns a VARIANT can mask columns of many data types … Databricks casts the
+  column value to VARIANT before the function runs, then casts the return value
+  back to the column's type following ANSI SQL rules"; "use
+  `schema_of_variant()` to inspect the value and branch on its type". Its
+  examples are `CREATE FUNCTION mask_numeric(val VARIANT) RETURNS VARIANT
+DETERMINISTIC RETURN 0::VARIANT;`, a `CASE WHEN schema_of_variant(data) = …`
+  with `ELSE NULL::VARIANT`, and hashing with `SHA2(…, 256)` in a
+  `DETERMINISTIC` function. The built-in masks follow the VARIANT pattern, not
+  a function per column type: one function serves a column of any type, and
+  `null` must. `hash` and `redact` return `NULL` for a value that is not text,
+  which casts to the column's type, where a text would fail the cast.
+- [UDF best practices](https://docs.databricks.com/aws/en/data-governance/unity-catalog/abac/udf-best-practices)
+  (updated 2026-10-08): "Use SQL UDFs instead of Python UDFs whenever
+  possible"; deterministic functions let the optimizer move filters below a
+  mask; use error-safe expressions such as `try_cast` instead of `CAST`;
+  target principals with `TO` and `EXCEPT`. The built-ins are SQL,
+  `DETERMINISTIC`, and use `try_cast`.
+- [CREATE FUNCTION (SQL)](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-sql-function)
+  (updated 2026-11-06): `CREATE [OR REPLACE] FUNCTION function_name (
+parameter_name data_type ) RETURNS data_type [ DETERMINISTIC ] RETURN
+expression`; creating one needs `USE CATALOG` on the catalog, and `USE
+SCHEMA` and `CREATE FUNCTION` on the schema (the prerequisites' lines);
+  replacing one also needs owning it or `MANAGE`, which run_as has as the
+  owner of the functions it created.
+- [cast](https://docs.databricks.com/aws/en/sql/language-manual/functions/cast)
+  and [try_cast](https://docs.databricks.com/aws/en/sql/language-manual/functions/try_cast)
+  (both updated 2026-10-28): `VARIANT` casts to `STRING`.
+  [schema_of_variant](https://docs.databricks.com/aws/en/sql/language-manual/functions/schema_of_variant)
+  (updated 2026-09-11) returns the value's type as DDL, such as `STRING`.
+  [sha2](https://docs.databricks.com/aws/en/sql/language-manual/functions/sha2)
+  (updated 2026-09-11): "Returns a checksum of the SHA-2 family as a hex string".
+- [current_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/current_user)
+  (updated 2026-09-11) now says it is deprecated in favour of its alias
+  `session_user`, which returns the same identity. The task keeps
+  `current_user()`, as exact grants use it (section 8.6), so both ask the same
+  way.
+- [Bundle run identity](https://docs.databricks.com/aws/en/dev-tools/bundles/run-as)
+  (updated 2026-10-07): `run_as` applies to the bundle's jobs and pipelines,
+  so the after-refresh task runs as the identity that refreshes the
+  pipelines, which is the one `EXCEPT` must name.
+
 ## Earlier sources
 
 The SQL, Python and Lakeflow Connect syntax are recorded in the package

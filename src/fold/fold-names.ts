@@ -37,6 +37,11 @@ export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean
   const [area, index, ...rest] = segments(pointer);
   const role = roleAt(model, pointer);
   if (role !== undefined) return principalPlace(role);
+  if (pointer === functionsPointer)
+    return {
+      name: "governance_functions",
+      description: "Schema of the functions that masks and row filters use.",
+    };
   if (area === "tables") return tablePlace(model, Number(index), rest, pipeline);
   const path = [index ?? "", ...rest].filter(Boolean);
   const setting = path.filter((part) => !/^\d+$/.test(part)).join(".");
@@ -47,6 +52,9 @@ export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean
     description: `The value at ${pointer} of the resolved definitions.`,
   };
 }
+
+/** The Platform's `databricks.governance.functions`, the schema of the masks' functions. */
+const functionsPointer = "/platform/sections/databricks/governance/functions";
 
 /** The platform's principal of a role, and a table's grant's principal. */
 const platformRole = /^\/platform\/principals\/([^/]+)$/;

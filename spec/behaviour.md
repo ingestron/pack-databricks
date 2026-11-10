@@ -17,17 +17,17 @@ with a target per environment, which a tool writes to one folder (the CLI writes
 `build/databricks/`). It is deployed from that folder with
 `databricks bundle deploy -t <environment>`.
 
-| Path                                 | What it is                                                                             |
-| ------------------------------------ | -------------------------------------------------------------------------------------- |
-| `databricks.yml`                     | The bundle: name, `include`, `sync`, `variables` and one target per environment        |
-| `resources/<pipeline>.pipeline.yml`  | The pipeline that builds the tables, when any table has a store step                   |
-| `resources/<gateway>.pipeline.yml`   | A Lakeflow Connect ingestion gateway, one per database connection                      |
-| `resources/<ingestion>.pipeline.yml` | A Lakeflow Connect ingestion pipeline, one per managed connection                      |
-| `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                     |
-| `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                                 |
-| `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                          |
-| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments, grants and table checks, when any is on |
-| `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it      |
+| Path                                 | What it is                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `databricks.yml`                     | The bundle: name, `include`, `sync`, `variables` and one target per environment                  |
+| `resources/<pipeline>.pipeline.yml`  | The pipeline that builds the tables, when any table has a store step                             |
+| `resources/<gateway>.pipeline.yml`   | A Lakeflow Connect ingestion gateway, one per database connection                                |
+| `resources/<ingestion>.pipeline.yml` | A Lakeflow Connect ingestion pipeline, one per managed connection                                |
+| `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                               |
+| `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                                           |
+| `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                                    |
+| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments, grants, policies and table checks, when any is on |
+| `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it                |
 
 `<pipeline>` and `<job>` are the model's `names.pipeline` and `names.job`;
 `<gateway>` and `<ingestion>` are `<pipeline>_<connection>_gateway` and
@@ -138,9 +138,10 @@ What `build` writes, which the folded bundle also follows:
   `compute.serverless`, `compute.budget_policy_id` and `compute.channel`;
   `schedule.cron`, `schedule.timezone` and `schedule.paused`;
   `notifications.on_failure` and `alerts`; `grants`, as the grants of a managed schema; the
-  five `manage` settings (`schemas`, `tags`, `comments`, `checks`, `grants`);
-  `principals`, through each table's grants; and
-  `databricks.governance.unmasked` (section 8.6). Definitions
+  seven `manage` settings (`schemas`, `tags`, `comments`, `checks`, `grants`,
+  `masks`, `filters`); `principals`, through each table's grants; and
+  `databricks.governance.unmasked` and `databricks.governance.functions`
+  (sections 8.6 and 8.7). Definitions
   checks each against the Platform's field reference, so tools can show them with
   their defaults.
 
@@ -213,6 +214,7 @@ A variable's name comes from where the value is in the first target's model:
 | A part of a transform's code                                         | `<table>_value`                                 |
 | A platform setting                                                   | `<setting>`, such as `notifications_on_failure` |
 | A role's principal, in `principals` and in each table's grants       | `principal_<role>`                              |
+| The Platform's `databricks.governance.functions`                     | `governance_functions`                          |
 | The schedule's pause, in the case of section 3.4                     | `pause_status`                                  |
 | A deploy-time value `${envvar:NAME}`                                 | NAME in lower case (section 3.5)                |
 
@@ -234,7 +236,8 @@ places where values differ in the order `compareTargets` gives them.
   job's `spark_python_task` gets the parameter `ingestron.<name>=${var.<name>}`
   (section 2). A principal is quoted after its value is replaced
   (section 8.6), so a principal that differs between environments is quoted
-  as each environment gives it.
+  as each environment gives it. So is a function's name (section 8.7), so the
+  schema of `governance.functions` may differ between environments.
 - **In a PySpark transform's file** (`src/<pipeline>/**/*.py`), a variable
   inside a double-quoted text the pack writes, such as the table's `name` or an
   input's name, is read with `spark.conf.get("ingestron.<name>")`:
@@ -477,10 +480,21 @@ The pack's tests check, on synthetic projects:
   principal with a backtick, a write role on a streaming table and on a
   materialised view, layer access, a table that grants no role, managed
   schemas and a custom classification tag key), and `grants`, the same project
-  with additive grants and without managed schemas;
+  with additive grants and without managed schemas; `masked`, the governed
+  project with masks and row filters (dev and prod: policies on the managed
+  schemas; the built-in `hash` and `null` masks, a team's mask function named
+  with one part and one named with three; a filter matched by tag and one by
+  classification; a `governance.functions` that differs between environments;
+  and the places whose stale policies are dropped), and `masked-tables`, the
+  same project without managed schemas, so its policies are on the tables;
 - `exact-revokes-only-direct-extras`: the task's `revokes` function, run with
   Python over synthetic `SHOW GRANTS` rows (section 8.6). The test skips,
   saying why, when `python3` is not installed;
+- the task's policy functions, run with Python in the same way (section 8.7):
+  every policy of the `masked` goldens, made with `unmasked` empty, has `EXCEPT`
+  with the identity the task runs as; `stale_drops` over synthetic
+  `SHOW POLICIES` rows drops only the Ingestron policies a place no longer
+  has, of the switches that are on; names are quoted;
 - that every bundle file of every golden is valid for the bundle
   schema that `databricks bundle schema` prints with the Databricks CLI
   v1.23.0 or later. The test skips, saying why, when that CLI is not
@@ -541,11 +555,13 @@ does with each value. The sources of the Databricks features are in
 | `access.grants: read`                   | `GRANT SELECT ON TABLE`, after each refresh, with `manage.grants`           | used      |
 | `access.grants: write`                  | `GRANT SELECT, MODIFY ON TABLE`; not on a materialised view                 | used      |
 | `access.exact`                          | `REVOKE` of the direct grants no role gives, after each refresh             | used      |
-| `access.masks`, `access.filters`        | `CREATE POLICY … COLUMN MASK`, `ROW FILTER`                                 | not yet   |
+| `access.masks: null`, `hash`, `redact`  | `CREATE POLICY … COLUMN MASK` with the pack's mask function, `manage.masks` | used      |
+| `access.masks: function`                | `CREATE POLICY … COLUMN MASK` with the team's function                      | used      |
+| `access.filters`                        | `CREATE POLICY … ROW FILTER` with the team's function, `manage.filters`     | used      |
 
 Every `used` feature is generally available on the page the pack checked on
 2026-11-09, or for expectations, quarantine, cleansing, time zones and
-deduplicate on 2026-11-10, or for grants on 2026-11-11 (references.md), except the run duration threshold behind
+deduplicate on 2026-11-10, or for grants, masks and row filters on 2026-11-11 (references.md), except the run duration threshold behind
 `operations.alerts: slow`, which the job configuration page labels Public
 Preview: a standard with `features: ga` that raises slow alerts gets
 `PREVIEW_FEATURE`. `history: bitemporal` is Beta, which is why it is not yet.
@@ -619,8 +635,15 @@ are the pack's, `used`, for every method that keeps a table in Unity Catalog:
 `lakeflow-connect`, whose ingestion pipeline publishes streaming tables that
 the after-refresh task already tags by their three-part names. They still need
 `manage.grants`: with it off, the definitions package reports
-`CAPABILITY_OFF`. `access.masks` and `access.filters` are `not-yet`
-("Planned.").
+`CAPABILITY_OFF`.
+
+The mask and filter entries (`access.masks: null`, `hash`, `redact` and
+`function`, and `access.filters`) are the pack's too, `used`, for the same
+methods: Unity Catalog applies row filter and column mask policies to
+streaming tables and materialised views, which is what each of these
+methods keeps, Lakeflow Connect's included, and the after-refresh task sets
+the classification tags the policies match on all of them (section 8.7).
+They need `manage.masks` and `manage.filters`.
 
 The step that writes the table judges `load.deletes` (definitions
 specification, section 11.5): the store step, or `lakeflow-connect`, which
@@ -666,9 +689,11 @@ The Platform fields that belong to Databricks are written under `databricks`:
 `mode`, `workspace`, `run_as`, `compute`, `permissions`, `manage` and `grants`,
 each with the schema it had at the top of the Platform, and `warehouse_id`,
 the SQL warehouse that runs the bundle's SQL tasks. `manage` also takes
-`grants` (section 8.6). `governance` takes `functions`, the `catalog.schema`
-for mask functions, and `unmasked`, the principals, as the platform names
-them, that see real values and whose privileges exact grants never revoke. The section allows no other
+`grants` (section 8.6), and `masks` and `filters` (section 8.7). `governance`
+takes `functions`, the `catalog.schema` for mask functions and for the team's
+functions named with one part, and `unmasked`, the principals, as the platform
+names them, that see real values and whose privileges exact grants never
+revoke. The section allows no other
 field. A project that still writes a moved field at the top gets
 `PLATFORM_FIELD_MOVED` (a warning), and the output is the same. The pack reads
 each field from either place; `databricks.warehouse_id` is listed with the
@@ -887,7 +912,8 @@ is revoked only when all of these hold:
   item's `name`, in any letter case. A row on the schema, catalog or
   metastore, which the table inherits, is kept;
 - its `actionType` is a privilege name, of letters, spaces and `_` only, and
-  is not ownership (`OWN`, `OWNERSHIP`) or a denial (`DENY …`);
+  is not ownership (`OWN`, `OWNERSHIP`) or a denial (any action that starts
+  with `DEN`, such as `DENY SELECT` or `DENIED_SELECT`);
 - its principal is not one to keep;
 - its principal is not named by the item's grants, or is named and the grant
   does not give that privilege.
@@ -938,4 +964,158 @@ Ingestron's separator: `key:value` sets the key to the value.
   or filters asks for nothing new.
 
 With exact grants on any table, a section "Exact grants" says what the task
-removes and keeps, and lists the tables.
+removes and keeps, and lists the tables, each as Markdown code (in double
+backticks when the name has a backtick).
+
+### 8.7 Masks and row filters
+
+The model gives each table's masks, each a column, its classification and its
+mask (`null`, `hash`, `redact` or a function), and its row filters, each a
+name, a column and a function (definitions specification, section 8.2). The
+definitions package judges them against the pack's coverage and the
+platform's `manage.masks` and `manage.filters`, records in the table's
+`notApplied` what is not applied, and reports `MASK_NEEDS_RUN_AS`,
+`MASK_FUNCTIONS`, `POLICY_LIMIT` and `POLICY_PRINCIPALS`. The pack builds
+only what is applied, and never judges it again:
+
+- With `manage.masks` and `manage.filters` both off, nothing below is built,
+  and the files are what they were before masks existed.
+- A mask, with `manage.masks` on, unless the table's `notApplied` has
+  `masks` for its column.
+- A row filter, with `manage.filters` on, unless the table's `notApplied`
+  has `filters`.
+
+Unity Catalog applies masks and filters as attribute-based policies that match
+columns by their governed tags. The after-refresh task makes them, so they
+are plain SQL that runs as the run_as identity after each refresh.
+
+**Functions.** A one-part function name, of a mask or a filter, is in the
+Platform's `databricks.governance.functions`: `region_filter` with
+`functions: main.governance` is `main.governance.region_filter`. A three-part
+name is used as written. So one standard serves environments whose catalogs
+differ. The built-in masks are functions the task creates in
+`governance.functions`, only those a table applies, in the order first applied:
+
+| Mask     | Function                | Returns                                         |
+| -------- | ----------------------- | ----------------------------------------------- |
+| `null`   | `ingestron_mask_null`   | `NULL`, for a column of any type                |
+| `hash`   | `ingestron_mask_hash`   | the SHA-256 of a text, as 64 hexadecimal digits |
+| `redact` | `ingestron_mask_redact` | `****` in place of a text                       |
+
+Each is `CREATE OR REPLACE FUNCTION <name>(val VARIANT) RETURNS VARIANT
+DETERMINISTIC RETURN <expression>`, the documented pattern for one mask over
+columns of several types (references.md): Databricks casts the column's value
+to `VARIANT` and the result back to the column's type. `hash` and `redact` work
+on text: the definitions package refuses them for a column whose
+`logicalType` is not `string` (`MASK_TYPE`), and for a value that is not text,
+such as on a column whose type the contract does not give, they return
+`NULL`, which casts to any type, rather than a text that would fail the cast:
+
+- `null`: `NULL::VARIANT`;
+- `hash`: `CASE WHEN schema_of_variant(val) = 'STRING' THEN sha2(try_cast(val AS STRING), 256)::VARIANT ELSE NULL::VARIANT END`;
+- `redact`: `CASE WHEN schema_of_variant(val) = 'STRING' THEN '****'::VARIANT ELSE NULL::VARIANT END`.
+
+**Policies.** Where the policies go depends on who owns the schemas:
+
+- with `manage.schemas` on, the bundle creates the project's schemas, so the
+  policies are `ON SCHEMA <catalog>.<schema>`, once for each schema;
+- otherwise the schemas may be shared, so the policies are
+  `ON TABLE <catalog>.<schema>.<table>`, on the project's own tables only.
+
+On each schema or table, in the order of the model's tables:
+
+- one policy for each masked classification, in the order its tables' masks
+  give them: `ingestron_mask_<classification>`, `COLUMN MASK <function>`,
+  matching `has_tag_value('<tag>', '<classification>')`, where `<tag>` is the
+  standard's `governance.classification.tag`, the key the task sets the
+  classification as;
+- then one policy for each filter, in the order its tables' filters give
+  them: `ingestron_filter_<name>`, `ROW FILTER <function>`, matching
+  `has_tag_value('<tag>', '<classification>')` for a `{ classification }`
+  match, `has_tag('<key>')` for `{ tag }`, and
+  `has_tag_value('<key>', '<value>')` for `{ tag, value }`.
+
+Each is:
+
+```sql
+CREATE OR REPLACE POLICY `ingestron_mask_confidential` ON SCHEMA `main`.`bronze`
+  COLUMN MASK `main`.`governance`.`ingestron_mask_hash`
+  TO `account users` EXCEPT `<run_as>`, `data-stewards`
+  FOR TABLES MATCH COLUMNS has_tag_value('classification', 'confidential') AS c ON COLUMN c
+```
+
+with `USING COLUMNS (c)` in place of `ON COLUMN c` for a row filter, all on
+one line. A policy applies to every account user except the principals in
+`EXCEPT`: first the identity the task runs as, which is the run_as identity
+that refreshes the pipelines, then the Platform's `databricks.governance.unmasked`,
+each once in any letter case. So `EXCEPT` always names run_as, even when
+`unmasked` is empty: a pipeline that read masked or filtered values would keep
+them in the tables it writes for good (references.md). The task asks for its
+identity with `current_user()` when it runs, as for exact grants (section
+8.6): run_as is set per target and is not a variable, so a run_as that differs
+between environments is exempt in each.
+
+Policy names, the schema or table, function names and principals are quoted
+as identifiers: in backticks, each backtick doubled. A function's name is
+quoted after the values that differ between environments are replaced
+(section 3.3), each of its dot-separated parts on its own. Tag keys and values
+are SQL strings.
+
+**Stale policies.** After the policies, the task drops the policies it made
+before and makes no more. It lists the policies with `SHOW POLICIES ON
+<securable>`, which lists only those attached to it directly, on each of the
+project's own places: each schema of its tables when the policies are on
+schemas, and each of its tables in either case, so policies left on the
+tables from before the schemas were managed go too. A table that ends at the
+landed files has no place. A policy is dropped, with `DROP POLICY <name> ON
+<securable>`, only when all of these hold:
+
+- its name (the row's `policy_name`) starts with `ingestron_mask_` and
+  `manage.masks` is on, or with `ingestron_filter_` and `manage.filters` is
+  on, in any letter case;
+- it is not one of the policies the task made on that place.
+
+Every other policy is kept: another team's, and the task's own of a switch
+that is off. `stale_drops(rows, place, owned)` is a function of the task that
+reads nothing else, so it is tested over synthetic rows.
+
+**The after-refresh task.** With `manage.masks` or `manage.filters` on, the
+task holds `GOVERNANCE`: `functions`, each `{ name, returns }`; `policies`,
+each `{ name, on, kind, function, match }`; `places`, each `{ on, policies }`
+with the names of the policies made there; `owned`, the name prefixes of the
+switches that are on; and `unmasked`. The task runs, in this order: the tags
+and column comments; the mask functions; the grants and exact revokes
+(section 8.6); the policies; the drops of stale policies; and the table checks.
+Tags come before policies, which match them, and functions before the
+policies that use them. The file's header comment says what the task does
+beyond tags, comments and checks: two lines for grants, and two for masks and
+filters, each only when the task does it.
+
+**`prerequisites/<environment>.sql`**, with `manage.masks` or
+`manage.filters` on, gives the run_as identity once:
+
+- `USE CATALOG` on the catalog of `governance.functions` and of each of the
+  team's functions in another schema;
+- `USE SCHEMA, CREATE FUNCTION` on `governance.functions`, where the task
+  creates the built-in masks;
+- `USE SCHEMA` on each other schema of the team's functions, and `EXECUTE` on
+  each of the team's functions that an applied mask or filter names: a policy
+  needs `EXECUTE` on its function;
+- with policies on schemas, `MANAGE` on each of the project's schemas, which
+  making and dropping a policy there needs. The bundle creates those schemas,
+  so these lines are run after the first deployment, unless run_as deploys and
+  so owns them already.
+
+The policies on tables need nothing more: run_as owns the tables its
+pipelines create. Run_as is quoted as one identifier.
+
+**Request.** `ingestron request` adds, under "Must exist before deploying",
+when any mask or filter is applied:
+
+- the schema of `governance.functions`, when the task creates a built-in
+  mask there;
+- each of the team's functions that an applied mask or filter names;
+- that everyone who reads the tables uses serverless compute or Databricks
+  Runtime 16.4 or later, since older runtimes cannot read a table with a
+  policy;
+- the governed tag, as in section 8.6.

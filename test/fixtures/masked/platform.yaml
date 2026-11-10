@@ -1,0 +1,31 @@
+# Where this project's assets go, and who may use its tables. Values differ per environment.
+apiVersion: ingestron.io/v1
+kind: Platform
+id: lakehouse
+workspace:
+  host: ${values.host}
+run_as:
+  service_principal_name: 7f3c2a10-0000-4000-8000-000000000001
+tags:
+  team: sales
+  environment: ${environment.name}
+permissions:
+  - group_name: sales-engineers
+    level: CAN_MANAGE
+  - group_name: sales-analysts
+    level: CAN_VIEW
+schedule:
+  cron: 0 0 5 * * ?
+  timezone: Europe/London
+notifications:
+  on_failure: [sales-data@example.com]
+principals:
+  marketing-analysts: ${values.marketing}
+  analysts: team`s analysts
+databricks:
+  manage: { schemas: true, tags: true, grants: true, masks: true, filters: true }
+  governance:
+    functions: ${values.governance}
+    unmasked: [data-stewards]
+  grants:
+    bronze: [{ principal: data-engineers, privileges: [SELECT] }]

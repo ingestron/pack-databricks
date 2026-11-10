@@ -1,8 +1,9 @@
 // What the bundle expects of the workspace, for `ingestron request`: the
-// objects that must exist before deploying, the job's schedule, and what exact
-// grants remove.
+// objects that must exist before deploying (masks' and filters' needs among them),
+// the job's schedule, and what exact grants remove.
 import { classificationTag, type RequestSection, type ResolvedModel } from "@ingestron/definitions";
 import { exactOn, keptPrincipals, tableGrants } from "../sql/index.js";
+import { governanceRequest } from "./governance-needs.js";
 
 /** The Databricks sections of the platform request. Nothing here is checked. */
 export function request(model: ResolvedModel): RequestSection[] {
@@ -10,7 +11,12 @@ export function request(model: ResolvedModel): RequestSection[] {
     {
       title: "Must exist before deploying",
       intro: "Ingestron has not checked these; the generated files expect them.",
-      lines: [...prerequisites(model), ...principals(model), ...governedTag(model)],
+      lines: [
+        ...prerequisites(model),
+        ...principals(model),
+        ...governanceRequest(model, code),
+        ...governedTag(model),
+      ],
     },
     { title: "Schedules", lines: [schedule(model)] },
     ...exactGrants(model),
@@ -96,8 +102,8 @@ function exactGrants(model: ResolvedModel): RequestSection[] {
     {
       title: "Exact grants",
       intro: `Exact grants are on. After each refresh, Ingestron removes every privilege granted directly on these tables to anyone their contracts and layers don't name, and any privilege a role's access doesn't give, such as MODIFY for a role that reads. It keeps ownership, grants on schemas and catalogs, ${and(kept)}. Before turning this on, move any access given by hand into the contracts.`,
-      lines: tables.map(
-        ({ fullName }) => `\`${fullName.catalog}.${fullName.schema}.${fullName.table}\``,
+      lines: tables.map(({ fullName }) =>
+        code(`${fullName.catalog}.${fullName.schema}.${fullName.table}`),
       ),
     },
   ];

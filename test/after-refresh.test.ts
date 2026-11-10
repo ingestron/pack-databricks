@@ -124,7 +124,7 @@ describe("prerequisites/<environment>.sql", () => {
 describe("capabilities", () => {
   it("declares each with what it needs on the platform", () => {
     const ids = databricks.capabilities?.map((capability) => capability.id);
-    expect(ids).toEqual(["schemas", "tags", "comments", "checks", "grants"]);
+    expect(ids).toEqual(["schemas", "tags", "comments", "checks", "grants", "masks", "filters"]);
     expect(databricks.capabilities?.every((capability) => capability.needs.length > 0)).toBe(true);
   });
 

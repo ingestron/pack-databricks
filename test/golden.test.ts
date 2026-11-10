@@ -1,6 +1,6 @@
 // The retail-shaped project folded for dev and prod, and for dev, test and prod, and
 // under a kit's standard, a project that cleanses and quarantines, and projects with grants,
-// against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
+// masks and row filters, against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,6 +17,15 @@ const quality = folderFiles(join(import.meta.dirname, "fixtures/quality"));
  * principal with a backtick, write roles, layer access and a custom classification tag key.
  */
 const governed = folderFiles(join(import.meta.dirname, "fixtures/governed"));
+
+/** The governed project with masks and row filters on managed schemas. */
+const masked = folderFiles(join(import.meta.dirname, "fixtures/masked"));
+
+/** The masked project without managed schemas, so its policies are on its tables. */
+const maskedTables = {
+  ...masked,
+  "platform.yaml": masked["platform.yaml"]!.replace("schemas: true, ", ""),
+};
 
 /** The same project with additive grants and without managed schemas. */
 const grants = {
@@ -81,6 +90,8 @@ const cases = {
   quality: { files: quality, environments: ["dev", "prod"] },
   governed: { files: governed, environments: ["dev", "prod"] },
   grants: { files: grants, environments: ["dev", "prod"] },
+  masked: { files: masked, environments: ["dev", "prod"] },
+  "masked-tables": { files: maskedTables, environments: ["dev", "prod"] },
 };
 
 describe("a PySpark transform whose names differ", () => {

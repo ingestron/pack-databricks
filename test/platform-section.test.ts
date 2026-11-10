@@ -1,7 +1,7 @@
 // The Platform's databricks section: what it accepts, and that it builds and folds as the
 // top-level fields did.
 import { memoryFiles } from "@ingestron/config";
-import { resolveDefinitions } from "@ingestron/definitions";
+import { resolveDefinitions, type JsonSchema } from "@ingestron/definitions";
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
 import { fold, folderFiles, foldFailures, resolveAll, retail, yamlOf } from "./fold-helpers.js";
@@ -52,6 +52,25 @@ describe("the Platform's databricks section", () => {
     const { result } = bundle(platform("databricks:\n  warehouse_id: abc123"));
     expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
     expect(databricks.platformFields).toContain("databricks.warehouse_id");
+  });
+
+  it("turns masks and row filters on in its manage", () => {
+    const manage = (databricks.platformSection as { properties: Record<string, JsonSchema> })
+      .properties.manage as { properties: Record<string, JsonSchema> };
+    expect(Object.keys(manage.properties)).toEqual([
+      "schemas",
+      "tags",
+      "comments",
+      "checks",
+      "grants",
+      "masks",
+      "filters",
+    ]);
+    for (const key of ["masks", "filters"])
+      expect(manage.properties[key], key).toMatchObject({
+        type: "boolean",
+        examples: [true],
+      });
   });
 
   it("keeps the section's field schemas the same as the Platform's", () => {

@@ -9,6 +9,7 @@ import {
   qualifyOf,
   quarantineComment,
 } from "./cleanse.js";
+import type { Governance } from "./governance.js";
 import { quoteName, renderQuery } from "./query.js";
 import { pythonData } from "./python-data.js";
 import {
@@ -42,8 +43,9 @@ export function renderSql({ template, data }: SqlFile): string {
 }
 
 /**
- * The after-refresh Python file, with its statements, checks and access as JSON. Without
- * access, the file has no access functions, as before grants existed.
+ * The after-refresh Python file, with its statements, checks, access and governance as JSON.
+ * Without access, the file has no access functions, as before grants existed; without
+ * governance, no policy functions, as before masks existed.
  */
 export function renderApply(data: {
   header: string;
@@ -51,6 +53,7 @@ export function renderApply(data: {
   checks: object[];
   access: object[];
   keep: string[];
+  governance: Governance | undefined;
 }): string {
   const access = data.access.length > 0;
   return renderSql({
@@ -61,6 +64,7 @@ export function renderApply(data: {
       checks: JSON.stringify(data.checks, null, 2),
       access: access ? JSON.stringify(data.access, null, 2) : "",
       keep: access ? JSON.stringify(data.keep, null, 2) : "",
+      governance: data.governance ? JSON.stringify(data.governance, null, 2) : "",
     },
     extension: "py",
   });

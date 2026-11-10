@@ -4,6 +4,7 @@
 import { classificationTag, type Capability, type ResolvedModel } from "@ingestron/definitions";
 import { tagParts } from "../sql/index.js";
 import { quoteName } from "../sql/index.js";
+import { governanceGrants } from "./governance-needs.js";
 
 const owner =
   "The run_as identity owns the tables the pipelines create, so it may change them; any other identity needs MODIFY on each table";
@@ -50,13 +51,42 @@ export const capabilities: Capability[] = [
       "Each principal needs USE CATALOG, and USE SCHEMA unless the bundle manages the schemas; ingestron request lists them",
     ],
   },
+  {
+    id: "masks",
+    title: "Column masks",
+    does: "Masks each classified column the standard names with a Unity Catalog column mask policy after each refresh, for everyone but run_as and the unmasked principals.",
+    needs: [
+      "Databricks Runtime 16.4 or later to make and to read tables with policies (serverless jobs have it)",
+      "USE CATALOG, USE SCHEMA and CREATE FUNCTION on governance.functions for run_as, and EXECUTE on each of the team's functions a mask names",
+      "MANAGE on the schemas when the bundle manages them, since the policies are on the schemas; run_as owns its tables, so policies on tables need nothing more",
+      "The classification as a governed tag, which an account administrator creates; ingestron request lists it",
+    ],
+  },
+  {
+    id: "filters",
+    title: "Row filters",
+    does: "Filters the rows of each table with a column a filter of the standard matches, with a Unity Catalog row filter policy after each refresh, for everyone but run_as and the unmasked principals.",
+    needs: [
+      "Databricks Runtime 16.4 or later to make and to read tables with policies (serverless jobs have it)",
+      "EXECUTE on each filter's function for run_as, with USE CATALOG and USE SCHEMA on its schema",
+      "MANAGE on the schemas when the bundle manages them, since the policies are on the schemas; run_as owns its tables, so policies on tables need nothing more",
+      "Each tag the filters match as a governed tag, which an account administrator creates",
+    ],
+  },
 ];
 
 /**
  * Capabilities whose needs an administrator grants once in prerequisites.sql; grants need
  * nothing there, since the run_as identity owns its tables.
  */
-const granted = new Set<Capability["id"]>(["schemas", "tags", "comments", "checks"]);
+const granted = new Set<Capability["id"]>([
+  "schemas",
+  "tags",
+  "comments",
+  "checks",
+  "masks",
+  "filters",
+]);
 
 /**
  * Characters a tag key may not hold: those the tags page or the governed tags page refuses
@@ -99,6 +129,14 @@ export function tagProblems(model: ResolvedModel): string[] {
   ];
 }
 
+/** The capabilities whose policies share one set of grants, written after the last that is on. */
+const policyIds = new Set<Capability["id"]>(["masks", "filters"]);
+
+/** A principal as one quoted name: in backticks, each backtick doubled; dots stay inside. */
+function quotedPrincipal(principal: string): string {
+  return `\`${principal.replaceAll("`", "``")}\``;
+}
+
 /** SQL an administrator runs once, so the run_as identity may do what is turned on. */
 export function prerequisites(model: ResolvedModel, header: string): string | undefined {
   const { manage, run_as: runAs } = model.platform;
@@ -107,8 +145,9 @@ export function prerequisites(model: ResolvedModel, header: string): string | un
   );
   if (on.length === 0) return undefined;
   const principal = runAs
-    ? quoteName(Object.values(runAs)[0] ?? "")
+    ? quotedPrincipal(Object.values(runAs)[0] ?? "")
     : "`<the identity that deploys>`";
+  const lastPolicy = on.filter((capability) => policyIds.has(capability.id)).at(-1);
   const catalogs = [...new Set(model.tables.map((table) => table.fullName.catalog))];
   const lines = [
     `-- ${header}`,
@@ -134,6 +173,7 @@ export function prerequisites(model: ResolvedModel, header: string): string | un
       lines.push(
         "-- Governed tags: an account administrator grants ASSIGN on each governed tag in the tag policy.",
       );
+    if (capability === lastPolicy) lines.push(...governanceGrants(model, principal));
     lines.push("");
   }
   return `${lines.join("\n").trimEnd()}\n`;

@@ -2,7 +2,7 @@
 // field has the schema it had at the top of the Platform, so the editor reads the same, with
 // `find` and `suggest` added: where a team finds each value, and what it looks like.
 import type { JsonSchema } from "@ingestron/definitions";
-import { governance, manageGrants } from "./platform-access.js";
+import { governance, manageFilters, manageGrants, manageMasks } from "./platform-access.js";
 import { permissions, runAs } from "./platform-identity.js";
 
 /** The Platform's `databricks:` section (spec section 8.4). */
@@ -107,6 +107,8 @@ export const platformSection: JsonSchema = {
           examples: [true],
         },
         grants: manageGrants,
+        masks: manageMasks,
+        filters: manageFilters,
       },
       description:
         "Shared resources and metadata this bundle manages. Each needs privileges on the platform.",

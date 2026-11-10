@@ -22,7 +22,7 @@ import {
   previewNote,
   type ConnectGroup,
 } from "../connect/index.js";
-import { accessItems, applyContract, keptPrincipals } from "../sql/index.js";
+import { accessItems, applyContract, governanceOf, keptPrincipals } from "../sql/index.js";
 import { prerequisites } from "../methods/index.js";
 import { renderApply, renderSql, sqlFile } from "../sql/index.js";
 
@@ -143,14 +143,17 @@ export function scriptPath(pipeline: string): string {
   return `tasks/${pipeline}/apply_contract.py`;
 }
 
-/** The Python file that applies tags, comments, grants and table checks after every refresh. */
+/** The Python file that applies tags, comments, grants, policies and checks after every refresh. */
 function applyFiles(model: ResolvedModel, refreshes: Task[], output: Output): Task[] {
   const { statements, checks } = applyContract(model);
   const access = accessItems(model);
-  if (statements.length === 0 && checks.length === 0 && access.length === 0) return [];
+  const governance = governanceOf(model);
+  const nothing = statements.length + checks.length + access.length === 0;
+  if (nothing && !governance) return [];
   const path = scriptPath(model.names.pipeline);
   const keep = keptPrincipals(model);
-  output.files[path] = renderApply({ header: output.header, statements, checks, access, keep });
+  const data = { header: output.header, statements, checks, access, keep, governance };
+  output.files[path] = renderApply(data);
   return [
     { key: "apply_contract", python: `../${path}`, after: refreshes.map((task) => task.key) },
   ];
