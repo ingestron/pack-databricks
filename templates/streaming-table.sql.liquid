@@ -1,7 +1,3 @@
 -- {{ header }}
 {% render "table", table: table %}
 AS {% render "read-files", source: source %};
-{%- if quarantine != "" %}
-
-{% render "quarantine", quarantine: quarantine %};
-{%- endif %}

@@ -41,4 +41,4 @@ def ingestron_orders_clean_quarantine():
     return ingestron_orders_clean_rows().withColumn(
         "_failed_checks",
         ingestron_expr("filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`customer_id` IS NOT NULL, NULL, 'customer_id_not_null'), IF(`updated_at` IS NOT NULL, NULL, 'updated_at_not_null')), name -> name IS NOT NULL)"),
-    ).filter("NOT ((`id` IS NOT NULL) AND (`customer_id` IS NOT NULL) AND (`updated_at` IS NOT NULL))")
+    ).filter("NOT coalesce((`id` IS NOT NULL) AND (`customer_id` IS NOT NULL) AND (`updated_at` IS NOT NULL), FALSE)")

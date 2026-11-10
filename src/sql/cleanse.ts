@@ -137,7 +137,10 @@ export interface FailedChecks {
   column: string;
   /** The array of the names of the failed checks. */
   failed: string;
-  /** True for a row that fails any check that drops rows. */
+  /**
+   * True for a row that fails any check that drops rows; a check that is null counts as
+   * failed, as `failed` names it.
+   */
   keep: string;
 }
 
@@ -150,10 +153,11 @@ export function failedChecks(table: ResolvedTable): FailedChecks | undefined {
   return {
     column: table.quarantine.column,
     failed: `filter(array(${names.join(", ")}), name -> name IS NOT NULL)`,
-    keep:
+    keep: `NOT coalesce(${
       conditions.length === 1
-        ? `NOT (${conditions[0]})`
-        : `NOT (${conditions.map((condition) => `(${condition})`).join(" AND ")})`,
+        ? conditions[0]
+        : conditions.map((condition) => `(${condition})`).join(" AND ")
+    }, FALSE)`,
   };
 }
 

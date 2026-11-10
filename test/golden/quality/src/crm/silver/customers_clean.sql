@@ -45,4 +45,4 @@ SELECT * FROM `bronze`.`customers`
 ) AS cleansed
 QUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1
 ) AS checked
-WHERE NOT ((`id` IS NOT NULL) AND (`email` IS NOT NULL) AND (`updated_at` IS NOT NULL));
+WHERE NOT coalesce((`id` IS NOT NULL) AND (`email` IS NOT NULL) AND (`updated_at` IS NOT NULL), FALSE);

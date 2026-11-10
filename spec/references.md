@@ -164,23 +164,28 @@ release label, so the pack records each as generally available. Each entry
 gives the date the page says it was last updated.
 
 - [Expectation recommendations and advanced patterns](https://docs.databricks.com/aws/en/ldp/expectation-patterns)
-  (updated 2026-10-26), "Quarantine invalid records": the rules are joined into
-  one flag, `NOT ((<rule>) AND (<rule>))`, computed over the checked rows of a
-  table that also carries the rules as expectations, and the rows it flags are
-  read apart from the valid ones (`quality.quarantine`). The page writes the
-  flagged table as a `TEMPORARY` streaming table and splits it with
-  `TEMPORARY LIVE VIEW`s; the pack keeps the table as it is and builds
-  `<table>_quarantine` from the flagged rows, for the reasons below. No
-  release label.
+  (updated 2026-10-26), "Quarantine invalid records" (`quality.quarantine`).
+  The source is read once, through a view. A `TEMPORARY` streaming table
+  carries the rules as expectations and the flag
+  `NOT ((<rule>) AND (<rule>)) AS is_quarantined`, and two views read it,
+  one for the valid rows and one for the flagged ones. The pack keeps that
+  shape with tables in place of the views, which a pipeline cannot stream
+  from (below). An appending streaming table reads the files once into a
+  `PRIVATE` streaming table, and the table and `<table>_quarantine` stream
+  from it. The table keeps its own constraints, and the quarantine table
+  keeps the flagged rows. No release label.
 - [CREATE STREAMING TABLE (pipelines)](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-streaming-table)
-  (updated 2026-10-02): "Private streaming tables were previously created with
-  the TEMPORARY parameter", and a streaming table's query reads with
-  `STREAM`, from `read_files` or another table (`STREAM(customers_bronze)`).
+  (updated 2026-10-02): `CREATE OR REFRESH [PRIVATE] STREAMING TABLE`;
+  "Private streaming tables were previously created with the TEMPORARY
+  parameter", are "only persisted across the lifetime of the pipeline", and
+  within the pipeline a reference to their name resolves to them. A streaming
+  table's query reads with `STREAM`, from `read_files` or another table
+  (`STREAM(customers_bronze)`).
 - [CREATE VIEW (pipelines)](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-view)
   (updated 2026-09-14): a pipeline's views take no `CONSTRAINT` clauses and
   "cannot have streaming queries, or be used as a streaming source". So the
-  pattern's views cannot carry a streaming table's rows here; the quarantine
-  table reads the rows itself.
+  pattern's views cannot carry a streaming table's rows here; streaming tables
+  read the private table instead.
 - [Transform data with pipelines](https://docs.databricks.com/aws/en/ldp/transform)
   (updated 2026-10-09): streaming tables select from `STREAM(<table>)` with
   expressions and `WHERE`, as the quarantine of a change-data table does from
@@ -215,19 +220,51 @@ gives the date the page says it was last updated.
   [`coalesce`](https://docs.databricks.com/aws/en/sql/language-manual/functions/coalesce)
   (each updated 2026-09-11): the cleansing operations `trim`, `empty`, `map`
   (`CASE expr WHEN opt THEN res … ELSE def END`), `case` and `default`.
-- [Star clause](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-star):
-  `* EXCEPT (<columns>)`, from Databricks Runtime 11.3 LTS, which leaves out
-  the columns a table selects again cleansed.
+- [Star clause](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-star)
+  (updated 2026-09-11): `* EXCEPT (<columns>)`, from Databricks Runtime 11.3
+  LTS, which leaves out the columns a table selects again cleansed.
 - [`QUALIFY`](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-qualify)
   and
   [`row_number`](https://docs.databricks.com/aws/en/sql/language-manual/functions/row_number)
   (both updated 2026-09-11): `QUALIFY` filters on a window function, from
   Databricks Runtime 10.4 LTS (`deduplicate`).
+- The conditions of checks (`quality.rules`), each page updated 2026-09-11:
+  [`rlike` operator](https://docs.databricks.com/aws/en/sql/language-manual/functions/rlike)
+  (`str [NOT] rlike regex`, true when `str` matches; the pack writes it
+  `RLIKE`, for `pattern`);
+  [`length`](https://docs.databricks.com/aws/en/sql/language-manual/functions/length)
+  (the character length of a string, for `length`);
+  [`size`](https://docs.databricks.com/aws/en/sql/language-manual/functions/size)
+  (the cardinality of an array, for `items`; with ANSI mode off `size(NULL)`
+  is -1, which a check never reaches, as it tests `IS NULL` first) and
+  [`array_distinct`](https://docs.databricks.com/aws/en/sql/language-manual/functions/array_distinct)
+  (`unique`);
+  [`%` operator](https://docs.databricks.com/aws/en/sql/language-manual/functions/percentsign)
+  (the remainder, for `multipleOf`; a divisor of 0 raises
+  `REMAINDER_BY_ZERO`, so a contract's `multipleOf: 0` stops the update when
+  the check runs); and
+  the [`in` predicate](https://docs.databricks.com/aws/en/sql/language-manual/functions/in)
+  (`elem in (expr1, …)`, for `in`; `NOT IN` for `notIn`).
+- Typed literals for cleansing values:
+  [`DATE` type](https://docs.databricks.com/aws/en/sql/language-manual/data-types/date-type)
+  (updated 2026-09-11, `DATE dateString`),
+  [`TIMESTAMP` type](https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-type)
+  (updated 2026-10-30, `TIMESTAMP timestampString`, with `T` or a space before
+  the time),
+  [`BOOLEAN` type](https://docs.databricks.com/aws/en/sql/language-manual/data-types/boolean-type)
+  (updated 2026-09-11, `{ TRUE | FALSE }`) and the
+  [literals](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-literals)
+  page (updated 2026-10-28), which lists them; numbers are numeric literals
+  as written.
 - [`filter`](https://docs.databricks.com/aws/en/sql/language-manual/functions/filter),
   [`array`](https://docs.databricks.com/aws/en/sql/language-manual/functions/array)
   and [`if`](https://docs.databricks.com/aws/en/sql/language-manual/functions/if)
   (each updated 2026-09-11): `filter(array(…), x -> x IS NOT NULL)` keeps the
-  names of the failed checks in `_failed_checks`.
+  names of the failed checks in `_failed_checks`; `IF(cond, NULL, '<name>')`
+  takes the name when `cond` is false or null, and
+  [`coalesce`](https://docs.databricks.com/aws/en/sql/language-manual/functions/coalesce)
+  in `NOT coalesce(<conditions>, FALSE)` keeps such a row in the quarantine
+  table too.
 - PySpark 4.3.0 API reference,
   [`DataFrame.withColumns`](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumns.html)
   ("adding multiple columns or replacing the existing columns that have the

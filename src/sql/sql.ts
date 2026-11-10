@@ -81,11 +81,14 @@ function streamingTable(table: ResolvedTable, header: string, catalog: string): 
   const source = sourceData(table, true);
   const data = { header, table: tableData(table, kind, catalog), source };
   if (table.store?.settings.mode === "append") {
-    const rows = `(\n${readFiles(source)}\n) AS checked`;
-    const quarantine = quarantineData(table, kind, catalog, rows);
+    // With quarantine, the files are read once, into a private table both tables read.
+    const checked = quoteName(`${table.name}_checked`);
+    const quarantine = quarantineData(table, kind, catalog, `STREAM(${checked})`);
+    if (quarantine === "")
+      return { template: "streaming-table.sql.liquid", data, extension: "sql" };
     return {
-      template: "streaming-table.sql.liquid",
-      data: { ...data, quarantine },
+      template: "quarantined-streaming-table.sql.liquid",
+      data: { ...data, checked, quarantine },
       extension: "sql",
     };
   }

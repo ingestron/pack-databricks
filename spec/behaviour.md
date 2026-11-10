@@ -731,40 +731,65 @@ per key.
 
 **Quarantine.** A table with `quarantine` in the model keeps its own
 constraints, so its `drop` checks still drop the failing rows and count them
-in the event log. After the table's statements, the same file builds
-`<table>_quarantine` (`quarantine.fullName`, named as the table is), the same
-kind of table, from the same rows:
+in the event log. The same file also builds `<table>_quarantine`
+(`quarantine.fullName`, named as the table is), the same kind of table, from
+the same rows, read once:
 
 ```sql
 -- Rows that a check with the action drop removed from customers, with the checks they failed.
 CREATE OR REFRESH MATERIALIZED VIEW `silver`.`customers_quarantine`
 COMMENT 'Rows of customers that failed a check that drops rows; _failed_checks names the checks.'
 AS SELECT *, filter(array(IF(<condition>, NULL, '<name>'), …), name -> name IS NOT NULL) AS _failed_checks
-FROM (
-<the table's query>
-) AS checked
-WHERE NOT ((<condition>) AND …);
+FROM <the rows>
+WHERE NOT coalesce((<condition>) AND …, FALSE);
 ```
 
-The conditions are those of the table's `drop` checks, in the table's order.
-This is Databricks' quarantine pattern: the rows are flagged with
-`NOT ((<rule>) AND …)` over the checked rows, and those it flags are kept apart
-from the valid ones. The pattern flags rows in one table and splits it with
-views; here the table stays the table it was, and the quarantine table reads
-the same rows again, keeping only the flagged ones. `_failed_checks` is an
-array of the names of the checks the row failed.
+The conditions are those of the table's `drop` checks, in the table's order;
+one is written `NOT coalesce(<condition>, FALSE)`. A condition that is null
+counts as failed: `IF` names its check, and `coalesce` keeps the row, so every
+row whose `_failed_checks` names a check is in the quarantine table. (The
+conditions the definitions package writes are never null; a flow's or
+transform's own check can be.) `_failed_checks` is an array of the names of
+the checks the row failed.
 
-- A streaming table that appends reads the files again:
-  `FROM (SELECT … FROM STREAM read_files(…)) AS checked`, so the quarantine
-  table sees the cleansed rows.
-- A change-data table's quarantine reads its changes table,
-  `FROM STREAM(<changes>)`, which holds the cleansed changes.
-- A materialised view's reads the view's query, with its cleansing and
-  `QUALIFY`, or `read_files(…)` as the view does.
-- A PySpark transform's is a second `@dp.materialized_view` with the name
+This is Databricks' quarantine pattern ("Quarantine invalid records",
+references.md): the source is read once, its rows are flagged with
+`NOT ((<rule>) AND …)` in a table that every reader then reads, and the
+flagged rows are kept apart from the valid ones. The pattern splits that table
+with views; a pipeline's views cannot be read as a stream, so here the readers
+are tables:
+
+- **A streaming table that appends** reads the files once, into a private
+  streaming table that only the pipeline sees (`PRIVATE`, which the pattern's
+  `TEMPORARY` is now called). The table and its quarantine both stream from
+  it:
+
+  ```sql
+  CREATE OR REFRESH PRIVATE STREAMING TABLE `<table>_checked`
+  AS SELECT … FROM STREAM read_files(…);
+
+  CREATE OR REFRESH STREAMING TABLE `bronze`.`<table>` (<its constraints>)
+  …
+  AS SELECT * FROM STREAM(`<table>_checked`);
+  ```
+
+  and `<the rows>` is ``STREAM(`<table>_checked`)``. The private table holds the
+  cleansed rows with their audit and rescued columns, so both tables see the
+  same rows, read by one Auto Loader stream. Its name is the table's name with
+  `_checked`, in no schema; table names are unique in a project. Without
+  quarantine the table reads the files itself, as before.
+
+- **A change-data table's** quarantine reads its changes table,
+  `STREAM(<changes>)`, which already holds each change once, cleansed.
+- **A materialised view's** reads `(<the view's query>) AS checked`, with its
+  cleansing and `QUALIFY`, or `read_files(…)` as the view does. A
+  materialised view is recomputed from its inputs on each update, so reading
+  them twice reads the same rows.
+- **A PySpark transform's** is a second `@dp.materialized_view` with the name
   and comment above, whose function `ingestron_<table>_quarantine()` returns
   `ingestron_<table>_rows()` with the column `_failed_checks` added by
-  `withColumn` and the rows kept by `filter("NOT ((<condition>) AND …)")`.
+  `withColumn` and the rows kept by
+  `filter("NOT coalesce((<condition>) AND …, FALSE)")`.
 
 The quarantine table has its comment and no constraints, clustering or table
-properties. One check is written `NOT (<condition>)`.
+properties.

@@ -123,14 +123,23 @@ describe("SQL Server through an ingestion gateway", () => {
     expect(result.ok).toBe(true);
     const reason =
       "Managed ingestion writes the table as the source gives it; check it in a transform in the next layer.";
-    const found = result.diagnostics.map((item) => [item.code, item.message]);
-    expect(found).toEqual(
-      expect.arrayContaining([
-        ["NOT_APPLIED", `The notNull rule isn't applied on databricks: ${reason}`],
-        ["NOT_APPLIED", `The drop action isn't applied on databricks: ${reason}`],
+    // The required id's rule, at the rule; the own check's action, where it is written.
+    expect(
+      result.diagnostics.map((item) => [
+        item.code,
+        item.message,
+        item.location?.file,
+        item.location?.line,
       ]),
-    );
-    expect(found.filter(([code]) => code !== "NOT_APPLIED")).toEqual([]);
+    ).toEqual([
+      ["NOT_APPLIED", `The notNull rule isn't applied on databricks: ${reason}`, "orders.yaml", 10],
+      [
+        "NOT_APPLIED",
+        `The drop action isn't applied on databricks: ${reason}`,
+        "orders.flow.yaml",
+        10,
+      ],
+    ]);
     expect(JSON.stringify(output)).not.toContain("positive");
   });
 
