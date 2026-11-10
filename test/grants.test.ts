@@ -72,6 +72,12 @@ describe("grants with manage.grants on", () => {
         grants: [{ principal: "finance", privileges: ["SELECT"] }],
         exact: true,
       },
+      {
+        table: quoted("top_customers", "gold"),
+        name: "dev_sales.gold.top_customers",
+        grants: [],
+        exact: true,
+      },
     ]);
     expect(out[script]).toContain('KEEP = json.loads(r"""[\n  "data-stewards"\n]""")');
     expect(out[script]).toContain(
@@ -116,7 +122,20 @@ describe("grants with manage.grants on", () => {
     expect(access.map((item) => [item.name, item.exact])).toEqual([
       ["dev_sales.bronze.customers", false],
       ["dev_sales.silver.daily_sales", true],
+      ["dev_sales.gold.top_customers", true],
     ]);
+  });
+
+  it("takes away the direct grants of a table without roles only when grants are exact", () => {
+    const additive = {
+      ...governed,
+      "standard.yaml": governed["standard.yaml"]!.replace("grants: exact", "grants: additive"),
+    };
+    const access = accessOf(built(additive).out[script]) as { name: string }[];
+    expect(access.map((item) => item.name)).not.toContain("dev_sales.gold.top_customers");
+    expect(yamlOf(built(governed).out, "resources/schemas.yml").resources.schemas.gold.grants).toBe(
+      undefined,
+    );
   });
 
   it("adds USE_SCHEMA for each principal granted in a managed schema", () => {

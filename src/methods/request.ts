@@ -66,9 +66,13 @@ function principals(model: ResolvedModel): string[] {
   });
 }
 
-/** With tags on and a classified column, the governed tag an account administrator creates. */
+/**
+ * With masks or filters on and a classified column, the governed tag an account administrator
+ * creates: their policies match governed tags, while plain tags need no administrator.
+ */
 function governedTag(model: ResolvedModel): string[] {
-  if (!model.platform.manage.tags) return [];
+  const { manage } = model.platform;
+  if (!manage.masks && !manage.filters) return [];
   const used = unique(
     model.tables.flatMap((table) =>
       table.contract.columns.flatMap((column) =>

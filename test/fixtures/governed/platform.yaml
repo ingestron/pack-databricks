@@ -19,12 +19,12 @@ schedule:
   timezone: Europe/London
 notifications:
   on_failure: [sales-data@example.com]
+principals:
+  marketing-analysts: ${values.marketing}
+  analysts: team`s analysts
 databricks:
   manage: { schemas: true, tags: true, grants: true }
   governance:
     unmasked: [data-stewards]
   grants:
     bronze: [{ principal: data-engineers, privileges: [SELECT] }]
-principals:
-  marketing-analysts: ${values.marketing}
-  analysts: team`s analysts

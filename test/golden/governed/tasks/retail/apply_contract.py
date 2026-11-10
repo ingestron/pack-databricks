@@ -77,6 +77,12 @@ ACCESS = json.loads(r"""[
       }
     ],
     "exact": true
+  },
+  {
+    "table": "`${ingestron.catalog}`.`gold`.`top_customers`",
+    "name": "${ingestron.catalog}.gold.top_customers",
+    "grants": [],
+    "exact": true
   }
 ]""")
 # Principals whose grants are never revoked, besides the identity this task runs as.

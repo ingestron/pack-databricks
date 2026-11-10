@@ -95,10 +95,42 @@ describe("the request", () => {
     );
   });
 
-  it("asks an account administrator for the governed tag and its values", () => {
-    expect(lines(governed)["Must exist before deploying"]!.lines).toContain(
-      "Governed tag `sensitivity`, with the values `public`, `internal` and `confidential`, which an account administrator creates; the run_as identity needs ASSIGN on it.",
-    );
+  it("asks an account administrator for the governed tag when masks or filters are on", () => {
+    const line =
+      "Governed tag `sensitivity`, with the values `public`, `internal` and `confidential`, which an account administrator creates; the run_as identity needs ASSIGN on it.";
+    const { model } = built(governed);
+    for (const switched of ["masks", "filters"] as const) {
+      const changed = structuredClone(model);
+      changed.platform.manage[switched] = true;
+      const request = databricks.request!(changed);
+      expect(request[0]!.lines, switched).toContain(line);
+    }
+  });
+
+  it("asks for no governed tag with tags alone, which plain tags need no administrator for", () => {
+    const request = lines(governed)["Must exist before deploying"]!.lines;
+    expect(request.join("\n")).not.toContain("Governed tag");
+  });
+
+  it("leaves the request of a project without grants, masks or filters as it was", () => {
+    const noRoles = {
+      ...grantsOff,
+      "contracts/customers.yaml": governed["contracts/customers.yaml"]!.replace(
+        /roles:[\s\S]*$/,
+        "",
+      ),
+      "contracts/orders.yaml": governed["contracts/orders.yaml"]!.replace(/roles:[\s\S]*$/, ""),
+    };
+    const request = databricks.request!(built(noRoles).model);
+    expect(request.map((section) => section.title)).toEqual([
+      "Must exist before deploying",
+      "Schedules",
+    ]);
+    expect(request[0]!.lines).toEqual([
+      "Catalog `dev_sales`, which the deploying identity can use.",
+      "Files at `abfss://landing@retaildev.dfs.core.windows.net/shop`, which the pipeline can read.",
+      "Serverless compute for pipelines and jobs, turned on in the workspace.",
+    ]);
   });
 
   it("says what exact grants remove and keep, and lists the tables", () => {
@@ -110,6 +142,7 @@ describe("the request", () => {
       "`dev_sales.bronze.orders`",
       "`dev_sales.bronze.customers`",
       "`dev_sales.silver.daily_sales`",
+      "`dev_sales.gold.top_customers`",
     ]);
   });
 

@@ -475,9 +475,9 @@ The pack's tests check, on synthetic projects:
   PySpark), and a synthetic project for access (`governed`, with dev and
   prod: exact grants, a role whose principal differs between environments, a
   principal with a backtick, a write role on a streaming table and on a
-  materialised view, layer access, managed schemas and a custom classification
-  tag key), and `grants`, the same project with additive grants and without
-  managed schemas;
+  materialised view, layer access, a table that grants no role, managed
+  schemas and a custom classification tag key), and `grants`, the same project
+  with additive grants and without managed schemas;
 - `exact-revokes-only-direct-extras`: the task's `revokes` function, run with
   Python over synthetic `SHOW GRANTS` rows (section 8.6). The test skips,
   saying why, when `python3` is not installed;
@@ -850,7 +850,9 @@ applied, and never judges it again:
   one statement per principal, `SELECT` before `MODIFY`, the principals in
   the order first granted.
 - Exact grants, for a table whose `access.exact` is true, whose grants are
-  applied, and whose `notApplied` does not list `exact`.
+  applied, and whose `notApplied` does not list `exact`. With exact grants,
+  the definitions package gives a table that grants no role an `access` with
+  no grants, so its direct grants are taken away too.
 
 **The after-refresh task.** When any table has a grant or exact grants, the
 task holds `ACCESS`, a list with, for each such table in the model's order,
@@ -927,10 +929,13 @@ Ingestron's separator: `key:value` sets the key to the value.
 - each principal of an applied grant: it must exist, and needs `USE CATALOG`
   on each catalog of its tables, and `USE SCHEMA` on each of their schemas
   unless the bundle manages the schemas;
-- with `manage.tags` and a classified column, the governed tag: an account
-  administrator creates it with the standard's classification values (or the
-  classifications the contracts use, when the standard lists none), and the
-  run_as identity needs `ASSIGN` on it.
+- with `manage.masks` or `manage.filters` on and a classified column, the
+  governed tag: an account administrator creates it with the standard's
+  classification values (or the classifications the contracts use, when the
+  standard lists none), and the run_as identity needs `ASSIGN` on it. Masks
+  and filters are policies that match governed tags; plain tags, which
+  `manage.tags` alone sets, need no administrator, so a project without masks
+  or filters asks for nothing new.
 
 With exact grants on any table, a section "Exact grants" says what the task
 removes and keeps, and lists the tables.

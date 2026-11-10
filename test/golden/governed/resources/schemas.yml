@@ -27,3 +27,7 @@ resources:
         - principal: finance
           privileges:
             - USE_SCHEMA
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: Layer gold of retail.
