@@ -1,0 +1,30 @@
+# How the organisation builds data products, with access from the contracts' roles.
+apiVersion: ingestron.io/v1
+kind: Standard
+id: acme
+packs: [databricks@2]
+naming:
+  catalog: "{{ environment }}_sales"
+layers:
+  - name: bronze
+    access:
+      roles: [{ role: data-engineers, access: write }]
+  - name: silver
+    access:
+      contract: false
+      roles: [{ role: finance, access: write }]
+  - gold
+quality:
+  required: drop
+store:
+  settings:
+    streaming-table:
+      properties: { delta.enableChangeDataFeed: "true" }
+  fixed:
+    streaming-table: { cluster_by: auto }
+governance:
+  classification:
+    values: [public, internal, confidential]
+    tag: sensitivity
+  access:
+    grants: exact

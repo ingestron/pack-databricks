@@ -23,7 +23,17 @@ const pages = {
   notifications: "https://docs.databricks.com/aws/en/jobs/notifications",
 };
 
-const ga = (source: string): FeatureStatus => ({ level: "ga", checked: "2026-11-09", source });
+/** The pages that give grants' release status, read on 2026-11-11. */
+const accessPages = {
+  grant: "https://docs.databricks.com/aws/en/sql/language-manual/security-grant",
+  revoke: "https://docs.databricks.com/aws/en/sql/language-manual/security-revoke",
+};
+
+const ga = (source: string, checked = "2026-11-09"): FeatureStatus => ({
+  level: "ga",
+  checked,
+  source,
+});
 const publicPreview = (source: string): FeatureStatus => ({
   level: "preview",
   label: "Public Preview",
@@ -90,6 +100,21 @@ export const intent: Record<string, IntentUse> = {
     pages.job,
     publicPreview(pages.job),
   ),
+  "access.grants=read": used(
+    "GRANT SELECT ON TABLE, after each refresh.",
+    accessPages.grant,
+    ga(accessPages.grant, "2026-11-11"),
+  ),
+  "access.grants=write": used(
+    "GRANT SELECT, MODIFY ON TABLE, after each refresh.",
+    accessPages.grant,
+    ga(accessPages.grant, "2026-11-11"),
+  ),
+  "access.exact=true": used(
+    "REVOKE of each privilege granted directly on the table that the access does not give, after each refresh.",
+    accessPages.revoke,
+    ga(accessPages.revoke, "2026-11-11"),
+  ),
 };
 
 /** Where the ingest step is the pack's own, the audit values that step adds are the pack's to build. */
@@ -143,6 +168,10 @@ export const viewIntent: Record<string, IntentUse> = {
       "A materialised view is recomputed on each update; keep history with a streaming table.",
   },
   "history=none": used("A materialised view keeps no more than its query gives.", pages.view),
+  "access.grants=write": {
+    use: "not-applicable",
+    reason: "Unity Catalog has no MODIFY on a materialised view: only its query writes it.",
+  },
   ...viewQualityIntent,
   ...Object.fromEntries(
     [...intentPaths.audit!.map((value) => `audit=${value}`), "rescued"].map((key) => [

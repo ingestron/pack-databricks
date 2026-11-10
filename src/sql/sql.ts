@@ -41,18 +41,26 @@ export function renderSql({ template, data }: SqlFile): string {
   return `${(engine.renderFileSync(template, data) as string).trimEnd()}\n`;
 }
 
-/** The after-refresh Python file, with its statements and checks as JSON. */
+/**
+ * The after-refresh Python file, with its statements, checks and access as JSON. Without
+ * access, the file has no access functions, as before grants existed.
+ */
 export function renderApply(data: {
   header: string;
   statements: string[];
   checks: object[];
+  access: object[];
+  keep: string[];
 }): string {
+  const access = data.access.length > 0;
   return renderSql({
     template: "apply-contract.py.liquid",
     data: {
       header: data.header,
       statements: JSON.stringify(data.statements, null, 2),
       checks: JSON.stringify(data.checks, null, 2),
+      access: access ? JSON.stringify(data.access, null, 2) : "",
+      keep: access ? JSON.stringify(data.keep, null, 2) : "",
     },
     extension: "py",
   });

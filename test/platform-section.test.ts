@@ -59,6 +59,7 @@ describe("the Platform's databricks section", () => {
       .properties;
     expect(Object.keys(properties).sort()).toEqual([
       "compute",
+      "governance",
       "grants",
       "manage",
       "mode",

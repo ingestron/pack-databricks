@@ -5,6 +5,7 @@ import type { ResolvedModel, ResolvedTable } from "@ingestron/definitions";
 import { stringify } from "yaml";
 import { jobAlerts } from "./alerts.js";
 import { jobOperations, taskOperations } from "./operations.js";
+import { tableGrants } from "../sql/index.js";
 
 /** A YAML document as data. */
 export type Data = Record<string, unknown>;
@@ -161,13 +162,16 @@ export function schemaRef(keys: Map<string, string>, catalog: string, schema: st
   return key ? `\${resources.schemas.${key}.name}` : schema;
 }
 
-/** Managed schemas, with the platform's grants for their layer. */
+/**
+ * Managed schemas, with the platform's grants for their layer, and USE_SCHEMA for each
+ * principal granted on their tables (none with `manage.grants` off).
+ */
 export function schemasFile(model: ResolvedModel, keys: Map<string, string>): Data | undefined {
   if (keys.size === 0) return undefined;
   const schemas: Data = {};
   for (const table of uniqueSchemas(model.tables)) {
     const key = keys.get(`${table.fullName.catalog}.${table.fullName.schema}`) as string;
-    const grants = model.platform.grants[table.layer] ?? [];
+    const grants = withUseSchema(model.platform.grants[table.layer] ?? [], granted(model, table));
     schemas[key] = {
       catalog_name: table.fullName.catalog,
       name: table.fullName.schema,
@@ -176,6 +180,32 @@ export function schemasFile(model: ResolvedModel, keys: Map<string, string>): Da
     };
   }
   return { resources: { schemas } };
+}
+
+type SchemaGrant = ResolvedModel["platform"]["grants"][string][number];
+
+/** The principals granted on the tables in the table's schema, in the order first granted. */
+function granted(model: ResolvedModel, table: ResolvedTable): string[] {
+  const same = (other: ResolvedTable) =>
+    other.fullName.catalog === table.fullName.catalog &&
+    other.fullName.schema === table.fullName.schema;
+  const principals = model.tables
+    .filter(same)
+    .flatMap((other) => tableGrants(model, other).map((grant) => grant.principal));
+  return [...new Set(principals)];
+}
+
+/** The platform's grants, with USE_SCHEMA added to each principal's, or a grant of its own. */
+function withUseSchema(grants: SchemaGrant[], principals: string[]): SchemaGrant[] {
+  const added = grants.map((grant) =>
+    principals.includes(grant.principal) && !grant.privileges.includes("USE_SCHEMA")
+      ? { ...grant, privileges: [...grant.privileges, "USE_SCHEMA"] }
+      : grant,
+  );
+  const own = principals
+    .filter((principal) => !grants.some((grant) => grant.principal === principal))
+    .map((principal) => ({ principal, privileges: ["USE_SCHEMA"] }));
+  return [...added, ...own];
 }
 
 function uniqueSchemas(tables: ResolvedTable[]): ResolvedTable[] {

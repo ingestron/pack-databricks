@@ -1,7 +1,7 @@
 // The features that change shared Unity Catalog objects, each turned on with
 // `manage.<id>` in the platform, and what the platform needs for them. The
 // documentation, the editor and prerequisites.sql all read this list.
-import type { Capability, ResolvedModel } from "@ingestron/definitions";
+import { classificationTag, type Capability, type ResolvedModel } from "@ingestron/definitions";
 import { tagParts } from "../sql/index.js";
 import { quoteName } from "../sql/index.js";
 
@@ -41,27 +41,70 @@ export const capabilities: Capability[] = [
     does: "Counts the contract's rules over all rows after each refresh, then warns or fails the run.",
     needs: ["SELECT on each table for the run_as identity (an owner has it)", "Serverless jobs"],
   },
+  {
+    id: "grants",
+    title: "Grants",
+    does: "Grants each table to the principals of its contract's roles and its layer's after each refresh; with exact grants, revokes what they do not give.",
+    needs: [
+      "The run_as identity owns the tables the pipelines create, so it may grant and revoke on them",
+      "Each principal needs USE CATALOG, and USE SCHEMA unless the bundle manages the schemas; ingestron request lists them",
+    ],
+  },
 ];
 
-/** Tag keys Unity Catalog refuses: `. , - = / :` or longer than 255 characters. */
+/**
+ * Capabilities whose needs an administrator grants once in prerequisites.sql; grants need
+ * nothing there, since the run_as identity owns its tables.
+ */
+const granted = new Set<Capability["id"]>(["schemas", "tags", "comments", "checks"]);
+
+/**
+ * Characters a tag key may not hold: those the tags page or the governed tags page refuses
+ * (spec section 8.6), and control characters. `:` is also Ingestron's key:value separator.
+ */
+const refusedInKey = /[.,\-=/:*<>%&?\\\u0000-\u001f]/;
+
+/** The longest tag key Unity Catalog allows. */
+const longestKey = 256;
+
+/** The rules a refused key breaks, as the problems say them. */
+const keyRules = `keys have no . , - = / : * < > % & ? \\ or control characters, no space at either end, and at most ${longestKey} characters`;
+
+/** True when Unity Catalog allows the tag key. */
+function allowedKey(key: string): boolean {
+  return !refusedInKey.test(key) && key.trim() === key && key.length <= longestKey;
+}
+
+/** Tag keys Unity Catalog refuses, the classification tag key among them, when tags are on. */
 export function tagProblems(model: ResolvedModel): string[] {
   if (!model.platform.manage.tags) return [];
   const tags = model.tables.flatMap((table) => [
     ...table.contract.tags,
     ...table.contract.columns.flatMap((column) => column.tags ?? []),
   ]);
-  return [...new Set(tags)]
-    .filter((tag) => /[.,\-=/:]/.test(tagParts(tag)[0]) || tagParts(tag)[0].length > 255)
-    .map(
-      (tag) =>
-        `the tag "${tag}" has a key Unity Catalog does not allow: keys have no . , - = / : and at most 255 characters; write key:value for a value`,
-    );
+  const classified = model.tables.some((table) =>
+    table.contract.columns.some((column) => column.classification),
+  );
+  const key = classificationTag(model);
+  return [
+    ...[...new Set(tags)]
+      .filter((tag) => !allowedKey(tagParts(tag)[0]))
+      .map(
+        (tag) =>
+          `the tag "${tag}" has a key Unity Catalog does not allow: ${keyRules}; write key:value for a value`,
+      ),
+    ...(classified && !allowedKey(key)
+      ? [`the classification tag key "${key}" is a key Unity Catalog does not allow: ${keyRules}`]
+      : []),
+  ];
 }
 
 /** SQL an administrator runs once, so the run_as identity may do what is turned on. */
 export function prerequisites(model: ResolvedModel, header: string): string | undefined {
   const { manage, run_as: runAs } = model.platform;
-  const on = capabilities.filter((capability) => manage[capability.id]);
+  const on = capabilities.filter(
+    (capability) => granted.has(capability.id) && manage[capability.id],
+  );
   if (on.length === 0) return undefined;
   const principal = runAs
     ? quoteName(Object.values(runAs)[0] ?? "")

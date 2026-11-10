@@ -288,6 +288,88 @@ wall-clock times, and the pages do not say how a time that a clock change
 skips or repeats is resolved. The pack promises no result for those hours, and
 its tests do not run Spark.
 
+## Access
+
+Accessed 2026-11-11. The sources of spec section 8.6. Each entry gives the
+date the page says it was last updated. None of these pages labels grants as
+preview, so the pack records them as generally available.
+
+- [GRANT](https://docs.databricks.com/aws/en/sql/language-manual/security-grant)
+  (updated 2026-09-11): `GRANT privilege_types ON securable_object TO principal`,
+  for example ``GRANT SELECT ON TABLE sample_data TO `alf@melmak.et` ``
+  (`access.grants`). Names with special characters go in backticks. The page
+  does not say whether principals compare in any letter case.
+- [REVOKE](https://docs.databricks.com/aws/en/sql/language-manual/security-revoke)
+  (updated 2026-09-11): `REVOKE privilege_types ON securable_object FROM principal`;
+  "A `REVOKE` statement succeeds even if the specified privileges were not
+  granted in the first place" (`access.exact`). It says nothing of letter case.
+- [SHOW GRANTS](https://docs.databricks.com/aws/en/sql/language-manual/security-show-grant)
+  (updated 2026-09-11): `SHOW GRANTS [ principal ] ON securable_object`
+  "displays all privileges (inherited, denied, and granted) that affect the
+  securable object", in the columns `principal`, `actionType`, `objectType`
+  ("The object which the permission is attached to") and `objectKey` ("The
+  identifier of the object"). The page does not show a row a table inherits,
+  nor say whether ownership is listed. So the task treats a row as granted
+  on the table only when its `objectKey` is the table's own name, which a
+  privilege attached to the schema or catalog cannot have, and keeps every
+  other row, and any row whose action is ownership or a denial.
+- [Manage privileges in Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/)
+  (updated 2026-10-15): the owner of an object, and users with `MANAGE` on it,
+  see all grants on it with `SHOW GRANTS`; others see only their own. The
+  task runs as run_as, which owns the tables its pipelines create.
+- [Unity Catalog privileges](https://docs.databricks.com/aws/en/data-governance/unity-catalog/manage-privileges/privileges)
+  (updated 2026-11-06): reading a table needs `SELECT` on it, `USE CATALOG`
+  on its catalog and `USE SCHEMA` on its schema (the request's lines);
+  `MODIFY` applies to tables, and a materialised view takes `ALL PRIVILEGES`,
+  `APPLY TAG`, `MANAGE`, `READ METADATA`, `REFRESH` and `SELECT`, not
+  `MODIFY` (so `write` is not applicable to a materialised view); and for
+  `ALL PRIVILEGES` "only `ALL PRIVILEGES` is returned, not the individual
+  implied privileges like `SELECT` or `MODIFY`" (so a named principal's
+  `ALL PRIVILEGES` is revoked and its grant made again). Privileges
+  granted on a schema or catalog are inherited by its tables.
+- [Use Unity Catalog with pipelines](https://docs.databricks.com/aws/en/ldp/unity-catalog)
+  (updated 2026-10-09): "By default, only the pipeline owner has permission
+  to query datasets created by the pipeline"; others are given access with
+  `GRANT SELECT ON TABLE my_catalog.my_schema.table_name TO …`, as for the
+  streaming tables and materialised views a pipeline publishes. Lakeflow
+  Connect's ingestion pipelines publish streaming tables too, so the same
+  grants apply there.
+- [Principal](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-principal)
+  (updated 2026-09-11): users, service principals and groups are written in
+  backticks when the name has special characters, such as `@`, `-` or a
+  space; the page does not say how a backtick inside a name is written, nor
+  whether names compare in any letter case.
+- [Identifiers](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-identifiers)
+  (updated 2026-09-11): in a delimited identifier, "Use `` ` `` to escape `` ` ``
+  itself", so a backtick inside a principal is doubled.
+
+Letter case of principals: neither the GRANT, REVOKE and SHOW GRANTS pages
+nor the principal page say whether principals compare in any letter case.
+The task compares them in any case. That errs towards keeping: a principal
+that a contract names, or that is to be kept, in another letter case is
+never revoked as a stranger.
+
+- [current_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/current_user)
+  (updated 2026-09-11): "Returns the user executing the statement"; "When
+  called by a service principal, this function returns the UUID of the
+  service principal". The task keeps that identity, the run_as identity it
+  runs as, so a run_as that differs between environments is kept in each.
+- [Bundle run identity](https://docs.databricks.com/aws/en/dev-tools/bundles/run-as)
+  (updated 2026-10-07): `run_as` is the identity jobs and pipelines run as,
+  separate from the one that deploys.
+- [Apply tags to Unity Catalog securable objects](https://docs.databricks.com/aws/en/database-objects/tags)
+  (updated 2026-10-26): tag keys are case sensitive; keys and values have at
+  most 256 characters; "The following characters are not allowed in tag
+  keys: `. , - = / :`"; no spaces at either end of a key or value; at most 50
+  tags on a table or column; `ALTER TABLE … ALTER COLUMN … SET TAGS ('pii' = 'ssn')`.
+- [Governed tags](https://docs.databricks.com/aws/en/admin/governed-tags/)
+  (updated 2026-10-12): governed tag keys and values have at most 256
+  characters, are case sensitive, and may not hold `* . / < > % & ? \ =` or
+  control characters (ASCII 0-31), nor spaces at either end; at most 1,000
+  governed tags in an account, each with at most 500 values; `system.`,
+  `class.`, `sap.` and `ai.` are reserved for system tags. The two pages list
+  different characters, so the pack refuses a key that either refuses.
+
 ## Earlier sources
 
 The SQL, Python and Lakeflow Connect syntax are recorded in the package

@@ -1,7 +1,12 @@
 // What the contract asks of the tables beyond their definitions: tags, column
 // comments and checks over all rows. Lakeflow pipelines cannot do these, so a
 // job task applies them after each refresh, for the capabilities turned on.
-import type { ResolvedModel, ResolvedTable, TableCheck } from "@ingestron/definitions";
+import {
+  classificationTag,
+  type ResolvedModel,
+  type ResolvedTable,
+  type TableCheck,
+} from "@ingestron/definitions";
 import { quoteName } from "./query.js";
 import { sqlString } from "./sql-data.js";
 
@@ -17,7 +22,7 @@ export function applyContract(model: ResolvedModel): { statements: string[]; che
   const { manage } = model.platform;
   return {
     statements: model.tables.flatMap((table) => [
-      ...(manage.tags ? tagStatements(table) : []),
+      ...(manage.tags ? tagStatements(table, classificationTag(model)) : []),
       ...(manage.comments ? commentStatements(table) : []),
     ]),
     checks: manage.checks ? model.tables.flatMap(checkRuns) : [],
@@ -45,14 +50,19 @@ const tagList = (tags: string[]) =>
     .map(([key, value]) => `${sqlString(key)} = ${sqlString(value)}`)
     .join(", ");
 
-function tagStatements(table: ResolvedTable): string[] {
+/**
+ * The table's and its columns' tags. A column's classification is the tag `key`; a column
+ * tag of its own with that key is left out then, so the key is set once.
+ */
+function tagStatements(table: ResolvedTable, key: string): string[] {
   const alter = `ALTER ${kindOf(table)} ${nameOf(table)}`;
   const own =
     table.contract.tags.length > 0 ? [`${alter} SET TAGS (${tagList(table.contract.tags)})`] : [];
   const columns = table.contract.columns.flatMap((column) => {
+    const classified = column.classification !== undefined && column.classification !== "";
     const tags = [
-      ...(column.tags ?? []),
-      ...(column.classification ? [`classification:${column.classification}`] : []),
+      ...(column.tags ?? []).filter((tag) => !classified || tagParts(tag)[0] !== key),
+      ...(classified ? [`${key}:${column.classification}`] : []),
     ];
     return tags.length > 0
       ? [`${alter} ALTER COLUMN ${quoteName(column.name)} SET TAGS (${tagList(tags)})`]

@@ -52,6 +52,32 @@ describe("coverage", () => {
     expect(intentUseOf(connect, "history", "full")?.use).toBe("used");
   });
 
+  it("grants read and write, and exact grants, on every method that keeps a table", () => {
+    for (const [path, value] of [
+      ["access.grants", "read"],
+      ["access.grants", "write"],
+      ["access.exact", "true"],
+    ] as const) {
+      const use = intentUseOf(databricks, path, value);
+      expect(use?.use, `${path}=${value}`).toBe("used");
+      if (use?.use === "used")
+        expect(use.status).toMatchObject({ level: "ga", checked: "2026-11-11" });
+      for (const method of ["streaming-table", "lakeflow-connect"])
+        expect(
+          intentUseOf(databricks.methods[method] as Method, path, value),
+          method,
+        ).toBeUndefined();
+    }
+    const view = databricks.methods["materialised-view"] as Method;
+    expect(intentUseOf(view, "access.grants", "write")?.use).toBe("not-applicable");
+    expect(intentUseOf(view, "access.grants", "read")).toBeUndefined();
+    expect(intentUseOf(databricks, "access.masks", "hash")).toEqual({
+      use: "not-yet",
+      reason: "Planned.",
+    });
+    expect(intentUseOf(databricks, "access.filters", "true")?.use).toBe("not-yet");
+  });
+
   it("marks the run duration warning as a Public Preview feature", () => {
     expect(intentUseOf(databricks, "operations.alerts", "slow")).toEqual({
       use: "used",

@@ -17,17 +17,17 @@ with a target per environment, which a tool writes to one folder (the CLI writes
 `build/databricks/`). It is deployed from that folder with
 `databricks bundle deploy -t <environment>`.
 
-| Path                                 | What it is                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------------------- |
-| `databricks.yml`                     | The bundle: name, `include`, `sync`, `variables` and one target per environment   |
-| `resources/<pipeline>.pipeline.yml`  | The pipeline that builds the tables, when any table has a store step              |
-| `resources/<gateway>.pipeline.yml`   | A Lakeflow Connect ingestion gateway, one per database connection                 |
-| `resources/<ingestion>.pipeline.yml` | A Lakeflow Connect ingestion pipeline, one per managed connection                 |
-| `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                |
-| `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                            |
-| `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                     |
-| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments and table checks, when any is on    |
-| `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it |
+| Path                                 | What it is                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `databricks.yml`                     | The bundle: name, `include`, `sync`, `variables` and one target per environment        |
+| `resources/<pipeline>.pipeline.yml`  | The pipeline that builds the tables, when any table has a store step                   |
+| `resources/<gateway>.pipeline.yml`   | A Lakeflow Connect ingestion gateway, one per database connection                      |
+| `resources/<ingestion>.pipeline.yml` | A Lakeflow Connect ingestion pipeline, one per managed connection                      |
+| `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                     |
+| `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                                 |
+| `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                          |
+| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments, grants and table checks, when any is on |
+| `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it      |
 
 `<pipeline>` and `<job>` are the model's `names.pipeline` and `names.job`;
 `<gateway>` and `<ingestion>` are `<pipeline>_<connection>_gateway` and
@@ -81,7 +81,9 @@ What `build` writes, which the folded bundle also follows:
   `${ingestron.<name>}` in its statements and checks with the value of a task
   parameter `ingestron.<name>=<value>`. Built for one environment it has no
   parameters, so nothing is replaced.
-- **Grants** are in `prerequisites/<environment>.sql`.
+- **Grants** that the run_as identity needs once are in
+  `prerequisites/<environment>.sql`. Grants of the tables to the contracts'
+  roles are made by the after-refresh task (section 8.6).
 - **Operations.** The standard's operations policy (the model's `operations`)
   sets, only for what it gives: on each pipeline task of the refresh job (the
   refresh and each ingestion task, not the after-refresh task) `max_retries`
@@ -135,8 +137,10 @@ What `build` writes, which the folded bundle also follows:
   `run_as`, `permissions` and `tags`, which it writes as they are;
   `compute.serverless`, `compute.budget_policy_id` and `compute.channel`;
   `schedule.cron`, `schedule.timezone` and `schedule.paused`;
-  `notifications.on_failure` and `alerts`; `grants`, as the grants of a managed schema; and the
-  four `manage` settings (`schemas`, `tags`, `comments`, `checks`). Definitions
+  `notifications.on_failure` and `alerts`; `grants`, as the grants of a managed schema; the
+  five `manage` settings (`schemas`, `tags`, `comments`, `checks`, `grants`);
+  `principals`, through each table's grants; and
+  `databricks.governance.unmasked` (section 8.6). Definitions
   checks each against the Platform's field reference, so tools can show them with
   their defaults.
 
@@ -208,6 +212,7 @@ A variable's name comes from where the value is in the first target's model:
 | Another value of a table                                             | `<table>_<step>_<setting>`, `<table>_<field>`   |
 | A part of a transform's code                                         | `<table>_value`                                 |
 | A platform setting                                                   | `<setting>`, such as `notifications_on_failure` |
+| A role's principal, in `principals` and in each table's grants       | `principal_<role>`                              |
 | The schedule's pause, in the case of section 3.4                     | `pause_status`                                  |
 | A deploy-time value `${envvar:NAME}`                                 | NAME in lower case (section 3.5)                |
 
@@ -227,7 +232,9 @@ places where values differ in the order `compareTargets` gives them.
   such as a `read_files` path too.
 - **In the after-refresh task** it becomes `${ingestron.<name>}`, and the
   job's `spark_python_task` gets the parameter `ingestron.<name>=${var.<name>}`
-  (section 2).
+  (section 2). A principal is quoted after its value is replaced
+  (section 8.6), so a principal that differs between environments is quoted
+  as each environment gives it.
 - **In a PySpark transform's file** (`src/<pipeline>/**/*.py`), a variable
   inside a double-quoted text the pack writes, such as the table's `name` or an
   input's name, is read with `spark.conf.get("ingestron.<name>")`:
@@ -465,8 +472,16 @@ The pack's tests check, on synthetic projects:
   every rule kind and action, every cleansing operation, a time zone
   conversion from `Europe/London`, deduplicate, quarantine and per-table
   results, on a bronze table and the silver tables that read it, in SQL and in
-  PySpark);
-- that every bundle file of the `quality` golden is valid for the bundle
+  PySpark), and a synthetic project for access (`governed`, with dev and
+  prod: exact grants, a role whose principal differs between environments, a
+  principal with a backtick, a write role on a streaming table and on a
+  materialised view, layer access, managed schemas and a custom classification
+  tag key), and `grants`, the same project with additive grants and without
+  managed schemas;
+- `exact-revokes-only-direct-extras`: the task's `revokes` function, run with
+  Python over synthetic `SHOW GRANTS` rows (section 8.6). The test skips,
+  saying why, when `python3` is not installed;
+- that every bundle file of every golden is valid for the bundle
   schema that `databricks bundle schema` prints with the Databricks CLI
   v1.23.0 or later. The test skips, saying why, when that CLI is not
   installed.
@@ -523,10 +538,14 @@ does with each value. The sources of the Databricks features are in
 | `operations.trigger`                    | File arrival, table update and continuous triggers                          | not yet   |
 | `operations.schedule: project`          | One refresh job for the project, on the Platform's schedule                 | used      |
 | `operations.schedule: flow`             | A refresh job for each flow                                                 | not yet   |
+| `access.grants: read`                   | `GRANT SELECT ON TABLE`, after each refresh, with `manage.grants`           | used      |
+| `access.grants: write`                  | `GRANT SELECT, MODIFY ON TABLE`; not on a materialised view                 | used      |
+| `access.exact`                          | `REVOKE` of the direct grants no role gives, after each refresh             | used      |
+| `access.masks`, `access.filters`        | `CREATE POLICY … COLUMN MASK`, `ROW FILTER`                                 | not yet   |
 
 Every `used` feature is generally available on the page the pack checked on
 2026-11-09, or for expectations, quarantine, cleansing, time zones and
-deduplicate on 2026-11-10 (references.md), except the run duration threshold behind
+deduplicate on 2026-11-10, or for grants on 2026-11-11 (references.md), except the run duration threshold behind
 `operations.alerts: slow`, which the job configuration page labels Public
 Preview: a standard with `features: ga` that raises slow alerts gets
 `PREVIEW_FEATURE`. `history: bitemporal` is Beta, which is why it is not yet.
@@ -570,7 +589,10 @@ A method declares only what differs from the pack:
   are added by streaming tables over files."); `load.deletes` is
   `not-applicable` ("A materialised view is recomputed; a delete condition
   needs a streaming table with history.");
-- `materialised-view`: also `deduplicate`, used (section 8.5);
+- `materialised-view`: also `deduplicate`, used (section 8.5), and
+  `access.grants: write`, `not-applicable` ("Unity Catalog has no MODIFY on a
+  materialised view: only its query writes it."), so a write role gets
+  `SELECT` alone there;
 - `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
   ingestion reads the source, not files."); `history: none`, `latest` and `full`
   are used, as the connector's append mode and `scd_type`; `rescued` is
@@ -590,6 +612,15 @@ A method declares only what differs from the pack:
   and `quality.results` stay the pack's: the after-refresh task counts table
   checks over every table, and the ingestion pipeline publishes its event
   log.
+
+The access entries (`access.grants: read` and `write`, and `access.exact`)
+are the pack's, `used`, for every method that keeps a table in Unity Catalog:
+`streaming-table`, `materialised-view` (but `write`, above) and
+`lakeflow-connect`, whose ingestion pipeline publishes streaming tables that
+the after-refresh task already tags by their three-part names. They still need
+`manage.grants`: with it off, the definitions package reports
+`CAPABILITY_OFF`. `access.masks` and `access.filters` are `not-yet`
+("Planned.").
 
 The step that writes the table judges `load.deletes` (definitions
 specification, section 11.5): the store step, or `lakeflow-connect`, which
@@ -634,7 +665,10 @@ gives. The methods fill in intent that nothing declares: `streaming-table`
 The Platform fields that belong to Databricks are written under `databricks`:
 `mode`, `workspace`, `run_as`, `compute`, `permissions`, `manage` and `grants`,
 each with the schema it had at the top of the Platform, and `warehouse_id`,
-the SQL warehouse that runs the bundle's SQL tasks. The section allows no other
+the SQL warehouse that runs the bundle's SQL tasks. `manage` also takes
+`grants` (section 8.6). `governance` takes `functions`, the `catalog.schema`
+for mask functions, and `unmasked`, the principals, as the platform names
+them, that see real values and whose privileges exact grants never revoke. The section allows no other
 field. A project that still writes a moved field at the top gets
 `PLATFORM_FIELD_MOVED` (a warning), and the output is the same. The pack reads
 each field from either place; `databricks.warehouse_id` is listed with the
@@ -798,3 +832,105 @@ are tables:
 
 The quarantine table has its comment and no constraints, clustering or table
 properties.
+
+### 8.6 Access
+
+The model gives each table's access (definitions specification, section
+8.2): its grants, each a principal with `read`, or `read` and `write`, and
+whether grants are exact. The definitions package judges them against the
+pack's coverage and the platform's `manage.grants`, and records in the
+table's `notApplied` what is not applied. The pack builds only what is
+applied, and never judges it again:
+
+- With `manage.grants` off, nothing below is built, and the files are what
+  they were before grants existed.
+- A table's grants, unless its `notApplied` lists `grants`. Each principal
+  gets `SELECT`, and `MODIFY` for `write` unless `notApplied` lists `write`
+  (a materialised view). The grants of one principal on one table are joined:
+  one statement per principal, `SELECT` before `MODIFY`, the principals in
+  the order first granted.
+- Exact grants, for a table whose `access.exact` is true, whose grants are
+  applied, and whose `notApplied` does not list `exact`.
+
+**The after-refresh task.** When any table has a grant or exact grants, the
+task holds `ACCESS`, a list with, for each such table in the model's order,
+`table`, its three-part name quoted as SQL names it; `name`, its three-part
+name as text; `grants`, a list of `{ principal, privileges }`; and `exact`.
+It also holds `KEEP`, the Platform's `databricks.governance.unmasked`. After
+the tags and column comments, and before the table checks, the task runs for
+each table in turn:
+
+1. `GRANT <privileges> ON TABLE <table> TO <principal>`, for each grant;
+2. with `exact`, `SHOW GRANTS ON TABLE <table>`, then each statement that
+   `revokes` gives for its rows.
+
+Revokes follow grants, so a principal the table keeps is never left without
+access between the two. The values that differ between environments
+(section 3.3) are replaced in `table`, `name`, each principal and `KEEP`
+before anything is quoted or compared.
+
+**Quoting.** A principal is always written in backticks, with each backtick
+in it doubled: ``team`s analysts`` is ``` `team``s analysts` ```. The task
+quotes each principal itself, at run time; no principal is put into SQL any
+other way.
+
+**Revokes.** `revokes(rows, item, keep)` is a function of the task that reads
+nothing else: given the rows of `SHOW GRANTS ON TABLE` for one `ACCESS` item,
+and the principals to keep, it returns the `REVOKE` statements, in the rows'
+order, each once. The task passes `KEEP` and its own identity
+(`current_user()`), which is the run_as identity that owns the tables. A row
+is revoked only when all of these hold:
+
+- it is on the table itself: its `objectKey`, without backticks, is the
+  item's `name`, in any letter case. A row on the schema, catalog or
+  metastore, which the table inherits, is kept;
+- its `actionType` is a privilege name, of letters, spaces and `_` only, and
+  is not ownership (`OWN`, `OWNERSHIP`) or a denial (`DENY …`);
+- its principal is not one to keep;
+- its principal is not named by the item's grants, or is named and the grant
+  does not give that privilege.
+
+Principals compare in any letter case, so a principal written in another case
+is never revoked as a stranger. The statement is
+`REVOKE <privilege> ON TABLE <table> FROM <principal>`, with the privilege in
+upper case and `_` written as a space, and the principal as the row gives
+it, quoted. `ALL PRIVILEGES` held by a named principal is revoked, then the
+principal's grant is made again: `SHOW GRANTS` shows `ALL PRIVILEGES` alone,
+not the privileges it implies.
+
+**Managed schemas.** With `manage.grants` and `manage.schemas` on, each
+managed schema's grants in `resources/schemas.yml` also give `USE_SCHEMA` to
+each principal granted on a table in that schema: added to the platform's
+grant for that principal, when it has one without `USE_SCHEMA`, else as a
+grant of its own after the platform's. The principals come in the order they
+are first granted.
+
+**`prerequisites/<environment>.sql`** is unchanged by grants: the run_as
+identity owns the tables its pipelines create, so it may grant and revoke on
+them. The grants capability is not listed there.
+
+**Tags.** A column's classification is set as the tag whose key is the
+standard's `governance.classification.tag` (the definitions package's
+`classificationTag`, default `classification`). When the column has a
+classification, a tag of its own with that key is left out, so the key is
+set once, to the classification.
+
+**Tag keys.** With `manage.tags`, the pack refuses a tag key, and a
+classification tag key, that Unity Catalog does not allow: one with
+`. , - = / : * < > % & ? \`, a control character, a space at either end, or
+more than 256 characters. This joins the rules of the tags page and the
+governed tags page (references.md), so a key passes both. `:` is also
+Ingestron's separator: `key:value` sets the key to the value.
+
+**Request.** `ingestron request` adds, under "Must exist before deploying":
+
+- each principal of an applied grant: it must exist, and needs `USE CATALOG`
+  on each catalog of its tables, and `USE SCHEMA` on each of their schemas
+  unless the bundle manages the schemas;
+- with `manage.tags` and a classified column, the governed tag: an account
+  administrator creates it with the standard's classification values (or the
+  classifications the contracts use, when the standard lists none), and the
+  run_as identity needs `ASSIGN` on it.
+
+With exact grants on any table, a section "Exact grants" says what the task
+removes and keeps, and lists the tables.

@@ -35,7 +35,10 @@ describe("platform fields", () => {
       "manage.tags",
       "manage.comments",
       "manage.checks",
+      "manage.grants",
+      "principals",
       "databricks.warehouse_id",
+      "databricks.governance.unmasked",
     ]);
   });
 

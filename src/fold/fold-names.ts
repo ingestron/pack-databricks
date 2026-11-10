@@ -35,6 +35,8 @@ export function variableName(...parts: string[]): string {
  */
 export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean): Place {
   const [area, index, ...rest] = segments(pointer);
+  const role = roleAt(model, pointer);
+  if (role !== undefined) return principalPlace(role);
   if (area === "tables") return tablePlace(model, Number(index), rest, pipeline);
   const path = [index ?? "", ...rest].filter(Boolean);
   const setting = path.filter((part) => !/^\d+$/.test(part)).join(".");
@@ -43,6 +45,28 @@ export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean
   return {
     name: variableName(area ?? "", ...path),
     description: `The value at ${pointer} of the resolved definitions.`,
+  };
+}
+
+/** The platform's principal of a role, and a table's grant's principal. */
+const platformRole = /^\/platform\/principals\/([^/]+)$/;
+const grantRole = /^\/tables\/(\d+)\/access\/grants\/(\d+)\/principal$/;
+
+/**
+ * The role whose principal is at a place: in the platform's `principals`, or in a table's
+ * grant. Both are one variable per role, so every grant of a role shares it.
+ */
+function roleAt(model: ResolvedModel, pointer: string): string | undefined {
+  if (platformRole.test(pointer)) return segments(pointer)[2];
+  const grant = grantRole.exec(pointer);
+  if (!grant) return undefined;
+  return model.tables[Number(grant[1])]?.access?.grants[Number(grant[2])]?.role;
+}
+
+function principalPlace(role: string): Place {
+  return {
+    name: variableName("principal", role),
+    description: `Principal of the role ${role}.`,
   };
 }
 

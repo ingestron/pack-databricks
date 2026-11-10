@@ -22,7 +22,7 @@ import {
   previewNote,
   type ConnectGroup,
 } from "../connect/index.js";
-import { applyContract } from "../sql/index.js";
+import { accessItems, applyContract, keptPrincipals } from "../sql/index.js";
 import { prerequisites } from "../methods/index.js";
 import { renderApply, renderSql, sqlFile } from "../sql/index.js";
 
@@ -143,12 +143,14 @@ export function scriptPath(pipeline: string): string {
   return `tasks/${pipeline}/apply_contract.py`;
 }
 
-/** The Python file that applies tags, comments and table checks after every refresh. */
+/** The Python file that applies tags, comments, grants and table checks after every refresh. */
 function applyFiles(model: ResolvedModel, refreshes: Task[], output: Output): Task[] {
   const { statements, checks } = applyContract(model);
-  if (statements.length === 0 && checks.length === 0) return [];
+  const access = accessItems(model);
+  if (statements.length === 0 && checks.length === 0 && access.length === 0) return [];
   const path = scriptPath(model.names.pipeline);
-  output.files[path] = renderApply({ header: output.header, statements, checks });
+  const keep = keptPrincipals(model);
+  output.files[path] = renderApply({ header: output.header, statements, checks, access, keep });
   return [
     { key: "apply_contract", python: `../${path}`, after: refreshes.map((task) => task.key) },
   ];
