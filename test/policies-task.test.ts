@@ -73,7 +73,8 @@ describe("the after-refresh task's policy functions", () => {
 
   it("asks for its own identity, and puts it first in EXCEPT", () => {
     const task = golden("masked");
-    expect(task).toContain('runner = spark.sql("SELECT current_user()").first()[0]');
+    expect(task).toContain('runner = spark.sql("SELECT session_user()").first()[0]');
+    expect(task).not.toContain("current_user");
     expect(task).toContain("exempt = exempt_principals(runner, ");
     expect(
       call("exempt_principals", runner, ["data-stewards", "Data-Stewards", runner.toUpperCase()]),

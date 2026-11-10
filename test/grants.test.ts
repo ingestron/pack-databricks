@@ -42,6 +42,12 @@ describe("grants with manage.grants off", () => {
 });
 
 describe("grants with manage.grants on", () => {
+  it("keeps the identity the task runs as, asked with session_user()", () => {
+    const text = built(governed).out[script] ?? "";
+    expect(text).toContain('keep.append(spark.sql("SELECT session_user()").first()[0])');
+    expect(text).not.toContain("current_user");
+  });
+
   it("lists each table's grants, joined per principal, and exact grants", () => {
     const { out } = built(governed);
     const quoted = (table: string, schema = "bronze") => `\`dev_sales\`.\`${schema}\`.\`${table}\``;

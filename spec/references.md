@@ -349,11 +349,18 @@ The task compares them in any case. That errs towards keeping: a principal
 that a contract names, or that is to be kept, in another letter case is
 never revoked as a stranger.
 
-- [current_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/current_user)
-  (updated 2026-09-11): "Returns the user executing the statement"; "When
-  called by a service principal, this function returns the UUID of the
-  service principal". The task keeps that identity, the run_as identity it
-  runs as, so a run_as that differs between environments is kept in each.
+- [session_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/session_user)
+  (updated 2026-09-11, accessed 2026-11-11): "Returns the user connected to
+  Databricks", in Databricks SQL and Databricks Runtime 14.1 and above, which
+  "should use SESSION_USER instead of CURRENT_USER or USER"; "When called by a
+  service principal, this function returns the UUID of the service principal".
+  The task keeps that identity, the run_as identity it runs as, so a run_as
+  that differs between environments is kept in each. The after-refresh task
+  runs on serverless jobs, whose runtime is newer than 14.1 (the policies it
+  makes need 16.4 or serverless).
+  [current_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/current_user)
+  (updated 2026-09-11), which the task used before, is deprecated: it is an
+  alias of `session_user`.
 - [Bundle run identity](https://docs.databricks.com/aws/en/dev-tools/bundles/run-as)
   (updated 2026-10-07): `run_as` is the identity jobs and pipelines run as,
   separate from the one that deploys.
@@ -458,11 +465,10 @@ SCHEMA` and `CREATE FUNCTION` on the schema (the prerequisites' lines);
   (updated 2026-09-11) returns the value's type as DDL, such as `STRING`.
   [sha2](https://docs.databricks.com/aws/en/sql/language-manual/functions/sha2)
   (updated 2026-09-11): "Returns a checksum of the SHA-2 family as a hex string".
-- [current_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/current_user)
-  (updated 2026-09-11) now says it is deprecated in favour of its alias
-  `session_user`, which returns the same identity. The task keeps
-  `current_user()`, as exact grants use it (section 8.6), so both ask the same
-  way.
+- [session_user](https://docs.databricks.com/aws/en/sql/language-manual/functions/session_user)
+  (updated 2026-09-11): the identity the task asks for, the run_as identity
+  that refreshes the pipelines, put first in `EXCEPT`; as for exact grants
+  (section "Access" above), not the deprecated `current_user`.
 - [Bundle run identity](https://docs.databricks.com/aws/en/dev-tools/bundles/run-as)
   (updated 2026-10-07): `run_as` applies to the bundle's jobs and pipelines,
   so the after-refresh task runs as the identity that refreshes the

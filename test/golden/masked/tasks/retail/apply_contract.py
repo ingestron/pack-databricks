@@ -323,7 +323,7 @@ def with_item_values(item):
 def apply_access(spark):
     """Grants each table's access; with exact grants, then revokes what it does not give."""
     keep = [with_values(principal) for principal in KEEP]
-    keep.append(spark.sql("SELECT current_user()").first()[0])
+    keep.append(spark.sql("SELECT session_user()").first()[0])
     for item in map(with_item_values, ACCESS):
         for statement in grant_statements(item):
             spark.sql(statement)
@@ -394,7 +394,7 @@ def stale_drops(rows, place, owned):
 
 def apply_policies(spark):
     """Makes each mask and filter policy, then drops the Ingestron policies no longer made."""
-    runner = spark.sql("SELECT current_user()").first()[0]
+    runner = spark.sql("SELECT session_user()").first()[0]
     exempt = exempt_principals(runner, [with_values(principal) for principal in GOVERNANCE["unmasked"]])
     for policy in GOVERNANCE["policies"]:
         spark.sql(policy_statement(policy, exempt))

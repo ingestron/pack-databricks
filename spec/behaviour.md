@@ -905,7 +905,7 @@ other way.
 nothing else: given the rows of `SHOW GRANTS ON TABLE` for one `ACCESS` item,
 and the principals to keep, it returns the `REVOKE` statements, in the rows'
 order, each once. The task passes `KEEP` and its own identity
-(`current_user()`), which is the run_as identity that owns the tables. A row
+(`session_user()`), which is the run_as identity that owns the tables. A row
 is revoked only when all of these hold:
 
 - it is on the table itself: its `objectKey`, without backticks, is the
@@ -975,7 +975,9 @@ name, a column and a function (definitions specification, section 8.2). The
 definitions package judges them against the pack's coverage and the
 platform's `manage.masks` and `manage.filters`, records in the table's
 `notApplied` what is not applied, and reports `MASK_NEEDS_RUN_AS`,
-`MASK_FUNCTIONS`, `POLICY_LIMIT` and `POLICY_PRINCIPALS`. The pack builds
+`MASK_FUNCTIONS`, `POLICY_LIMIT`, `POLICY_PRINCIPALS` and `FILTER_MULTIPLE`
+(a table may have one row filter: Unity Catalog fails a query when more than
+one distinct row filter applies to a table for its user). The pack builds
 only what is applied, and never judges it again:
 
 - With `manage.masks` and `manage.filters` both off, nothing below is built,
@@ -1051,7 +1053,7 @@ that refreshes the pipelines, then the Platform's `databricks.governance.unmaske
 each once in any letter case. So `EXCEPT` always names run_as, even when
 `unmasked` is empty: a pipeline that read masked or filtered values would keep
 them in the tables it writes for good (references.md). The task asks for its
-identity with `current_user()` when it runs, as for exact grants (section
+identity with `session_user()` when it runs, as for exact grants (section
 8.6): run_as is set per target and is not a variable, so a run_as that differs
 between environments is exempt in each.
 

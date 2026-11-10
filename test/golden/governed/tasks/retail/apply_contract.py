@@ -205,7 +205,7 @@ def with_item_values(item):
 def apply_access(spark):
     """Grants each table's access; with exact grants, then revokes what it does not give."""
     keep = [with_values(principal) for principal in KEEP]
-    keep.append(spark.sql("SELECT current_user()").first()[0])
+    keep.append(spark.sql("SELECT session_user()").first()[0])
     for item in map(with_item_values, ACCESS):
         for statement in grant_statements(item):
             spark.sql(statement)

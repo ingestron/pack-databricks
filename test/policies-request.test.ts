@@ -2,7 +2,7 @@
 // the request asks for (spec section 8.7).
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
-import { built, governed } from "./governed-helpers.js";
+import { built, governed, resolve } from "./governed-helpers.js";
 import { masked, maskedTables, maskedWith } from "./masked-helpers.js";
 
 const runAs = "`7f3c2a10-0000-4000-8000-000000000001`";
@@ -106,6 +106,23 @@ describe("the request with masks and row filters", () => {
       text.replace("    confidential: hash\n    restricted: null\n", ""),
     );
     expect(must(files).join("\n")).not.toContain("Schema `dev_sales.governance`");
+  });
+});
+
+describe("two row filters on one table", () => {
+  it("is an error from definitions, FILTER_MULTIPLE, which stops generation", () => {
+    const files = maskedWith("standard.yaml", (text) =>
+      text.replace(
+        "  filters:\n",
+        "  filters:\n    pii_rows:\n      function: pii_filter\n      match: { tag: pii }\n",
+      ),
+    );
+    const result = resolve(files);
+    const errors = result.diagnostics.filter((item) => item.severity === "error");
+    expect(errors.map((item) => item.code)).toEqual(["FILTER_MULTIPLE"]);
+    expect(errors[0]!.message).toBe(
+      'The filters "pii_rows" and "region_rows" apply to table "customers"; a table may have one row filter.',
+    );
   });
 });
 
