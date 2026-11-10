@@ -488,6 +488,13 @@ does with each value. The sources of the Databricks features are in
 | `retention.time_travel`, `log`          | `delta.deletedFileRetentionDuration`, `delta.logRetentionDuration`          | not yet   |
 | `retention.landed_files`                | Kept by the landing pack                                                    | elsewhere |
 | `quality.results`                       | The pipeline's `event_log`, published to a table                            | used      |
+| `quality.rules` (every kind)            | A Lakeflow expectation, `CONSTRAINT … EXPECT (…)`                           | used      |
+| `quality.actions: warn`                 | `EXPECT` alone: the row is kept and counted                                 | used      |
+| `quality.actions: drop`                 | `ON VIOLATION DROP ROW`                                                     | used      |
+| `quality.actions: fail`                 | `ON VIOLATION FAIL UPDATE`                                                  | used      |
+| `quality.table-checks`                  | Counts in the after-refresh task, when `manage.checks` is on                | used      |
+| `quality.quarantine`                    | The documented quarantine pattern                                           | not yet   |
+| `cleanse.*`, `deduplicate`              | In the table's `SELECT`                                                     | not yet   |
 | `operations.retries`                    | The pipeline task's `max_retries` and `min_retry_interval_millis`           | used      |
 | `operations.timeout`                    | The job's `timeout_seconds`                                                 | used      |
 | `operations.concurrency`                | The job's `max_concurrent_runs` and `queue`                                 | used      |
@@ -498,7 +505,7 @@ does with each value. The sources of the Databricks features are in
 | `operations.schedule: flow`             | A refresh job for each flow                                                 | not yet   |
 
 Every `used` feature is generally available on the page the pack checked on
-2026-11-09 (references.md), except the run duration threshold behind
+2026-11-09, or for expectations on 2026-11-10 (references.md), except the run duration threshold behind
 `operations.alerts: slow`, which the job configuration page labels Public
 Preview: a standard with `features: ga` that raises slow alerts gets
 `PREVIEW_FEATURE`. `history: bitemporal` is Beta, which is why it is not yet.
@@ -516,7 +523,15 @@ one is missing. An entry is one of:
   files in place (the `files` method) or the source (`lakeflow-connect`),
   nothing lands them, so they are `not-yet` for those methods;
 - `not-yet` with the reason "Planned.", for every other path and value: the
-  table above is the target, not what the pack builds today.
+  table above is the target, not what the pack builds today. Among them are
+  `quality.quarantine`, every `cleanse` path and `deduplicate`.
+
+The quality entries (`quality.rules`, `quality.actions` and
+`quality.table-checks`) are the pack's, for every method. Table checks still
+need `manage.checks`: with it off, the definitions package reports
+`CAPABILITY_OFF`, not `NOT_APPLIED`. `lakeflow-connect` keeps what it did
+before: checks written in the definitions are an error of the table, since
+managed ingestion cannot run expectations.
 
 A method declares only what differs from the pack:
 

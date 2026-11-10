@@ -89,7 +89,7 @@ from. All were accessed on 2026-11-04 unless a date is given.
 
 ## Intent
 
-Accessed 2026-11-09. The sources of the `used` entries in the pack's intent
+Accessed 2026-11-09, except where an entry gives another date. The sources of the `used` entries in the pack's intent
 (spec, section 8). Where a page carries no release label, the pack records the
 feature as generally available.
 
@@ -121,9 +121,18 @@ BITEMPORAL` is Beta, so `history: bitemporal` is not used.
 - [Pipeline event log](https://docs.databricks.com/aws/en/ldp/monitor-event-logs):
   `event_log: {catalog, schema, name}` publishes the log to a table, where the
   expectation metrics are (`quality.results`). No release label.
+- [Pipeline expectations](https://docs.databricks.com/aws/en/ldp/expectations),
+  read 2026-11-10: `CONSTRAINT <name> EXPECT (<condition>)` keeps a failing
+  row and records it (`quality.actions: warn`); `ON VIOLATION DROP ROW` drops
+  it before it is written (`drop`); `ON VIOLATION FAIL UPDATE` stops the
+  update (`fail`). Streaming tables and materialised views support
+  expectations. Every rule kind of `quality.rules` is written as such a
+  constraint. No release label.
 - [Configure a task](https://docs.databricks.com/aws/en/jobs/configure-task):
   `max_retries` and `min_retry_interval_millis` on a task
-  (`operations.retries`). The page's default is no retries.
+  (`operations.retries`). The page's default is no retries. The after-refresh
+  task also runs the table checks, counts over all rows, when `manage.checks`
+  is on (`quality.table-checks`).
 - [Configure a job](https://docs.databricks.com/aws/en/jobs/configure-job):
   `timeout_seconds` (`operations.timeout`), `max_concurrent_runs` and `queue`
   (`operations.concurrency`), and the run
