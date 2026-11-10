@@ -244,7 +244,14 @@ gives the date the page says it was last updated.
   `REMAINDER_BY_ZERO`, so a contract's `multipleOf: 0` stops the update when
   the check runs); and
   the [`in` predicate](https://docs.databricks.com/aws/en/sql/language-manual/functions/in)
-  (`elem in (expr1, …)`, for `in`; `NOT IN` for `notIn`).
+  (`elem in (expr1, …)`, for `in`).
+- [NULL semantics](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-null-semantics)
+  (updated 2026-09-11, read 2026-11-10), "IN and NOT IN subqueries": `IN` is
+  true when the value is in the list, false when it is not and the list holds
+  no `NULL`, and unknown (`NULL`) when the value is `NULL`; `NOT IN` is its
+  negation (`notIn`). A check therefore writes `<c> IS NULL OR …` or
+  `<c> IS NOT NULL AND …` before `IN` and `NOT IN`, so it is never `NULL` for
+  a null value; the lists the definitions package writes hold no `NULL`.
 - Typed literals for cleansing values:
   [`DATE` type](https://docs.databricks.com/aws/en/sql/language-manual/data-types/date-type)
   (updated 2026-09-11, `DATE dateString`),
