@@ -10,16 +10,23 @@ const two = (extra = "") => ({
   "refunds.yaml": contract("refunds"),
 });
 
+/** The diagnostics, without the checks managed ingestion does not apply (see connect.test.ts). */
+function problems(files: Record<string, string>) {
+  return generate(files).result.diagnostics.filter(
+    (item) => !item.message.includes("Managed ingestion writes the table as the source gives it"),
+  );
+}
+
 describe("one gateway per connection", () => {
   it("refuses tables that would need a different gateway policy or staging schema", () => {
-    const { result } = generate(two("    ingest:\n      with: { gateway_policy_id: ABC123 }\n"));
-    expect(result.diagnostics.map((item) => item.message)).toEqual([
+    const found = problems(two("    ingest:\n      with: { gateway_policy_id: ABC123 }\n"));
+    expect(found.map((item) => item.message)).toEqual([
       "the tables of connection erp share one gateway, so gateway_policy_id and staging_schema must be the same; refunds differs from orders.",
     ]);
   });
 
   it("accepts the same values on every table", () => {
-    expect(generate(two()).result.diagnostics).toEqual([]);
+    expect(problems(two())).toEqual([]);
   });
 });
 

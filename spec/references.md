@@ -157,6 +157,90 @@ BITEMPORAL` is Beta, so `history: bitemporal` is not used.
   a warehouse's connection details show its HTTP path, which ends with the
   warehouse ID (`databricks.warehouse_id`).
 
+## Quality and cleansing
+
+Accessed 2026-11-10. The sources of spec section 8.5. Function pages carry no
+release label, so the pack records each as generally available. Each entry
+gives the date the page says it was last updated.
+
+- [Expectation recommendations and advanced patterns](https://docs.databricks.com/aws/en/ldp/expectation-patterns)
+  (updated 2026-10-26), "Quarantine invalid records": the rules are joined into
+  one flag, `NOT ((<rule>) AND (<rule>))`, computed over the checked rows of a
+  table that also carries the rules as expectations, and the rows it flags are
+  read apart from the valid ones (`quality.quarantine`). The page writes the
+  flagged table as a `TEMPORARY` streaming table and splits it with
+  `TEMPORARY LIVE VIEW`s; the pack keeps the table as it is and builds
+  `<table>_quarantine` from the flagged rows, for the reasons below. No
+  release label.
+- [CREATE STREAMING TABLE (pipelines)](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-streaming-table)
+  (updated 2026-10-02): "Private streaming tables were previously created with
+  the TEMPORARY parameter", and a streaming table's query reads with
+  `STREAM`, from `read_files` or another table (`STREAM(customers_bronze)`).
+- [CREATE VIEW (pipelines)](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-view)
+  (updated 2026-09-14): a pipeline's views take no `CONSTRAINT` clauses and
+  "cannot have streaming queries, or be used as a streaming source". So the
+  pattern's views cannot carry a streaming table's rows here; the quarantine
+  table reads the rows itself.
+- [Transform data with pipelines](https://docs.databricks.com/aws/en/ldp/transform)
+  (updated 2026-10-09): streaming tables select from `STREAM(<table>)` with
+  expressions and `WHERE`, as the quarantine of a change-data table does from
+  its changes table.
+- [CREATE MATERIALIZED VIEW (pipelines)](https://docs.databricks.com/aws/en/ldp/developer/ldp-sql-ref-create-materialized-view)
+  (updated 2026-10-09): a materialised view's query is any query, so it can
+  wrap a transform's query in a subquery and end with `QUALIFY`.
+- [Pipeline expectations](https://docs.databricks.com/aws/en/ldp/expectations)
+  (updated 2026-10-26): a `DROP ROW` expectation drops the row before it is
+  written and records it in the metrics, which is why the table keeps its
+  constraints beside the quarantine table.
+- [`to_utc_timestamp`](https://docs.databricks.com/aws/en/sql/language-manual/functions/to_utc_timestamp)
+  and
+  [`from_utc_timestamp`](https://docs.databricks.com/aws/en/sql/language-manual/functions/from_utc_timestamp)
+  (both updated 2026-09-11): `to_utc_timestamp(expr, timeZone)` "returns the
+  timestamp at UTC for a timestamp expr at timeZone", and
+  `from_utc_timestamp(expr, timeZone)` the timestamp at `timeZone` for one at
+  UTC; zones are tz database names (`cleanse.timezone`).
+- [`convert_timezone`](https://docs.databricks.com/aws/en/sql/language-manual/functions/convert_timezone)
+  (updated 2026-09-11): `convert_timezone([sourceTz, ]targetTz, sourceTs)`
+  converts a `TIMESTAMP_NTZ`, from Databricks Runtime 13.3 LTS; the example
+  names zones such as `'UTC'`. The pack always gives `sourceTz`.
+- [`TIMESTAMP_NTZ` type](https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-ntz-type)
+  (updated 2026-10-30): a timestamp without a time zone, and its
+  `TIMESTAMP_NTZ '<text>'` literal.
+- [`trim`](https://docs.databricks.com/aws/en/sql/language-manual/functions/trim),
+  [`nullif`](https://docs.databricks.com/aws/en/sql/language-manual/functions/nullif),
+  [`case`](https://docs.databricks.com/aws/en/sql/language-manual/functions/case),
+  [`upper`](https://docs.databricks.com/aws/en/sql/language-manual/functions/upper),
+  [`lower`](https://docs.databricks.com/aws/en/sql/language-manual/functions/lower)
+  and
+  [`coalesce`](https://docs.databricks.com/aws/en/sql/language-manual/functions/coalesce)
+  (each updated 2026-09-11): the cleansing operations `trim`, `empty`, `map`
+  (`CASE expr WHEN opt THEN res … ELSE def END`), `case` and `default`.
+- [Star clause](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-star):
+  `* EXCEPT (<columns>)`, from Databricks Runtime 11.3 LTS, which leaves out
+  the columns a table selects again cleansed.
+- [`QUALIFY`](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-qualify)
+  and
+  [`row_number`](https://docs.databricks.com/aws/en/sql/language-manual/functions/row_number)
+  (both updated 2026-09-11): `QUALIFY` filters on a window function, from
+  Databricks Runtime 10.4 LTS (`deduplicate`).
+- [`filter`](https://docs.databricks.com/aws/en/sql/language-manual/functions/filter),
+  [`array`](https://docs.databricks.com/aws/en/sql/language-manual/functions/array)
+  and [`if`](https://docs.databricks.com/aws/en/sql/language-manual/functions/if)
+  (each updated 2026-09-11): `filter(array(…), x -> x IS NOT NULL)` keeps the
+  names of the failed checks in `_failed_checks`.
+- PySpark 4.3.0 API reference,
+  [`DataFrame.withColumns`](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.withColumns.html)
+  ("adding multiple columns or replacing the existing columns that have the
+  same names", from 3.3.0) and
+  [`functions.expr`](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.expr.html)
+  (a SQL expression as a column): a PySpark transform's cleansing, deduplicate
+  and quarantine use the same SQL expressions.
+
+Clock changes: `to_utc_timestamp` and `from_utc_timestamp` read and write
+wall-clock times, and the pages do not say how a time that a clock change
+skips or repeats is resolved. The pack promises no result for those hours, and
+its tests do not run Spark.
+
 ## Earlier sources
 
 The SQL, Python and Lakeflow Connect syntax are recorded in the package

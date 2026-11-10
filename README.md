@@ -16,8 +16,12 @@ What it uses on Databricks:
   evolution mode.
 - **Change data with AUTO CDC:** `mode: upsert` (SCD type 1) or
   `mode: history` (SCD type 2), keyed by the contract's primary key.
-- **Expectations:** from required columns and your own checks, with
-  `warn`, `drop` or `fail` per check.
+- **Expectations:** from required columns, the contract's rules and your own
+  checks, with `warn`, `drop` or `fail` per check, and a quarantine table for
+  the rows a check drops.
+- **Cleansing:** trimming, empty text to null, mapped values, case, defaults
+  and time zone conversion in the table's `SELECT`, and one row per key in a
+  materialised view.
 - **Liquid clustering:** `CLUSTER BY AUTO` by default, or named columns.
 - **Materialised views** for transforms, in SQL or PySpark.
 - **Serverless pipelines**, a scheduled refresh job, Unity Catalog schemas
@@ -147,9 +151,18 @@ that declares no intent gets the same files as with 2.2.
   - the Platform's `alerts`: email and webhook alerts on failure, and, with the
     standard's `operations.alerts.slow_after`, a run duration rule (Public
     Preview);
-  - `quality.results`: each pipeline's event log, published to a table;
+  - `quality.results`: each pipeline's event log, published to a table, when
+    the standard or any of the pipeline's tables keeps results;
   - `audit` and `rescued`: load time, file path and modification time columns,
-    and `_rescued_data`, in streaming tables that read files.
+    and `_rescued_data`, in streaming tables that read files;
+  - `cleanse`: each column's operations in the table's `SELECT`, and
+    `deduplicate` as `QUALIFY row_number() … = 1` in a materialised view;
+  - `quality.quarantine`: a `<table>_quarantine` table of the rows a `drop`
+    check removes, with the failed checks' names in `_failed_checks`.
+- Lakeflow Connect writes the table as the source gives it. Checks, cleansing
+  and deduplicate on such a table are `NOT_APPLIED` warnings that say to do
+  them in a transform in the next layer. An expectation written on the flow
+  table is no longer an error.
 - Needs `@ingestron/definitions` 1.13 or later.
 
 ## What changed in 2.0

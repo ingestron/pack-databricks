@@ -98,12 +98,5 @@ function checkConnect(table: ResolvedTable): string[] {
   if (ingest.connection.connector === "kafka" && ingest.settings.mode !== "append") {
     problems.push("kafka topics can only be appended (mode: append)");
   }
-  const own = table.expectations
-    .filter((item) => item.from === "definition")
-    .map((item) => item.name);
-  if (own.length > 0)
-    problems.push(
-      `managed ingestion cannot run expectations (${own.join(", ")}); check the data in a transform`,
-    );
   return problems;
 }

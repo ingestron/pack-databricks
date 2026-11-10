@@ -58,16 +58,18 @@ export function pipelineFile(
     root_path: `../src/${names.pipeline}`,
     libraries: [{ glob: { include: `../src/${names.pipeline}/**` } }],
   };
-  const extras = { ...pipelineExtras(model), ...eventLog(model, pipeline) };
+  const extras = { ...pipelineExtras(model), ...eventLog(model, tables, pipeline) };
   return { resources: { pipelines: { [names.pipeline]: { ...pipeline, ...extras } } } };
 }
 
 /**
  * With quality results, the pipeline publishes its event log, where the expectation
- * metrics are, to `<pipeline>_event_log` in the pipeline's own catalog and schema.
+ * metrics are, to `<pipeline>_event_log` in the pipeline's own catalog and schema: when the
+ * standard keeps them, or any of the pipeline's tables does.
  */
-export function eventLog(model: ResolvedModel, pipeline: Data): Data {
-  if (!model.qualityResults) return {};
+export function eventLog(model: ResolvedModel, tables: ResolvedTable[], pipeline: Data): Data {
+  const kept = model.qualityResults || tables.some((table) => table.quality?.results === true);
+  if (!kept) return {};
   const { name, catalog, schema } = pipeline;
   return { event_log: { catalog, schema, name: `${String(name)}_event_log` } };
 }

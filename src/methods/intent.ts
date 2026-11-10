@@ -6,6 +6,7 @@ import {
   type IntentUse,
   type SettingAlias,
 } from "@ingestron/definitions";
+import { connectQualityIntent, qualityIntent, viewQualityIntent } from "./quality-intent.js";
 
 /** The page that gives a feature's release status; all were read on 2026-11-09. */
 const pages = {
@@ -20,7 +21,6 @@ const pages = {
   task: "https://docs.databricks.com/aws/en/jobs/configure-task",
   job: "https://docs.databricks.com/aws/en/jobs/configure-job",
   notifications: "https://docs.databricks.com/aws/en/jobs/notifications",
-  expectations: "https://docs.databricks.com/aws/en/ldp/expectations",
 };
 
 const ga = (source: string): FeatureStatus => ({ level: "ga", checked: "2026-11-09", source });
@@ -36,12 +36,6 @@ const used = (does: string, source: string, status = ga(source)): IntentUse => (
   status,
 });
 const notYet: IntentUse = { use: "not-yet", reason: "Planned." };
-/** The expectations page was read on 2026-11-10; it carries no release label. */
-const expectationsGa: FeatureStatus = {
-  level: "ga",
-  checked: "2026-11-10",
-  source: pages.expectations,
-};
 const landing: IntentUse = {
   use: "elsewhere",
   reason: "The ingest step that lands the files adds it.",
@@ -77,30 +71,7 @@ export const intent: Record<string, IntentUse> = {
   "storage.clustering=auto": used("CLUSTER BY AUTO.", pages.clustering),
   "storage.clustering=none": used("No CLUSTER BY clause.", pages.clustering),
   "quality.results": used("Publishes the pipeline's event log to a table.", pages.eventLog),
-  "quality.rules": used(
-    "A Lakeflow expectation on the table, from the check's SQL.",
-    pages.expectations,
-    expectationsGa,
-  ),
-  "quality.actions=warn": used(
-    "EXPECT: a failing row is kept and counted.",
-    pages.expectations,
-    expectationsGa,
-  ),
-  "quality.actions=drop": used(
-    "ON VIOLATION DROP ROW: a failing row is not written.",
-    pages.expectations,
-    expectationsGa,
-  ),
-  "quality.actions=fail": used(
-    "ON VIOLATION FAIL UPDATE: a failing row stops the update.",
-    pages.expectations,
-    expectationsGa,
-  ),
-  "quality.table-checks": used(
-    "A count over all rows in the after-refresh task, when manage.checks is on.",
-    pages.task,
-  ),
+  ...qualityIntent,
   "operations.retries": used("The pipeline task's max_retries and retry interval.", pages.task),
   "operations.timeout": used("The job's timeout_seconds.", pages.job),
   "operations.concurrency": used("The job's max_concurrent_runs and queue.", pages.job),
@@ -133,6 +104,7 @@ export const filesIntent: Record<string, IntentUse> = ownIngest;
 /** What differs for Lakeflow Connect, which reads the source, not files. */
 export const connectIntent: Record<string, IntentUse> = {
   ...ownIngest,
+  ...connectQualityIntent,
   "load.mode=files": {
     use: "not-applicable",
     reason: "Managed ingestion reads the source, not files.",
@@ -171,6 +143,7 @@ export const viewIntent: Record<string, IntentUse> = {
       "A materialised view is recomputed on each update; keep history with a streaming table.",
   },
   "history=none": used("A materialised view keeps no more than its query gives.", pages.view),
+  ...viewQualityIntent,
   ...Object.fromEntries(
     [...intentPaths.audit!.map((value) => `audit=${value}`), "rescued"].map((key) => [
       key,

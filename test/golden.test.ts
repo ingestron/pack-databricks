@@ -1,5 +1,6 @@
 // The retail-shaped project folded for dev and prod, and for dev, test and prod, and
-// under a kit's standard, against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
+// under a kit's standard, and a project that cleanses and quarantines, against the files in
+// test/golden. UPDATE_GOLDEN=1 writes them again.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,9 @@ import { fold, foldFailures, folderFiles, resolveAll, retail, shop } from "./fol
 
 /** The retail project under the lakehouse-streaming kit's standard, with alerts. */
 const standards = folderFiles(join(import.meta.dirname, "fixtures/standards"));
+
+/** A CRM project: bronze as it comes, silver cleansed, deduplicated, checked and quarantined. */
+const quality = folderFiles(join(import.meta.dirname, "fixtures/quality"));
 
 const threeEnvironments = [
   "id: retail",
@@ -61,6 +65,7 @@ const cases = {
   },
   pyspark: { files: pyspark, environments: ["dev", "prod"] },
   standards: { files: standards, environments: ["dev", "test", "prod"] },
+  quality: { files: quality, environments: ["dev", "prod"] },
 };
 
 describe("a PySpark transform whose names differ", () => {

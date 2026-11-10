@@ -4,6 +4,9 @@
 import type { Column, FullName, ResolvedTable } from "@ingestron/definitions";
 import { quoteName } from "./query.js";
 import { auditColumns, rescuedColumn } from "./audit.js";
+import { cleansedColumn } from "./cleanse.js";
+import { conditionOf } from "./conditions.js";
+import { sqlString } from "./text.js";
 
 /** The table definition shared by every SQL file. */
 export interface TableData {
@@ -29,10 +32,7 @@ export interface SourceData {
 
 const onViolation = { warn: "", drop: " ON VIOLATION DROP ROW", fail: " ON VIOLATION FAIL UPDATE" };
 
-/** A SQL string literal. */
-export function sqlString(text: string): string {
-  return `'${text.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
-}
+export { sqlString };
 
 /**
  * A table's name in a pipeline's code: `schema.table` when the pipeline's own
@@ -61,7 +61,7 @@ export function tableData(
     target: quoteName(localName(table.fullName, catalog)),
     constraints: table.expectations.map((item) => ({
       name: quoteName(item.name),
-      check: item.check,
+      check: conditionOf(item),
       on_violation: onViolation[item.action],
     })),
     comment: table.contract.description ? sqlString(table.contract.description) : "",
@@ -109,19 +109,31 @@ function textTimestamps(table: ResolvedTable): string[] {
 
 /**
  * `*`, or `* EXCEPT (<source names>), <source> AS <name>, …` for renamed
- * columns, and `CAST(<name> AS TIMESTAMP) AS <name>` for timestamps written as text.
+ * columns, `CAST(<name> AS TIMESTAMP) AS <name>` for timestamps written as text,
+ * and `<expression> AS <name>` for the other cleansed columns. A renamed column that is
+ * cleansed is read from its source name and selected once, cleansed.
  */
 function selectOf(table: ResolvedTable): string {
   const renamed = renamedColumns(table);
   const timestamps = textTimestamps(table);
-  if (renamed.length === 0 && timestamps.length === 0) return "*";
+  const cleansed = table.contract.columns.flatMap((column) => {
+    if (renamed.includes(column)) return [];
+    const expression = cleansedColumn(table, column, quoteName(column.name));
+    return expression ? [{ column, expression }] : [];
+  });
+  if (renamed.length === 0 && timestamps.length === 0 && cleansed.length === 0) return "*";
   const sources = [
     ...renamed.map((column) => quoteName(column.physicalName!)),
     ...timestamps.map(quoteName),
+    ...cleansed.map(({ column }) => quoteName(column.name)),
   ];
   const aliases = [
-    ...renamed.map((column) => `${quoteName(column.physicalName!)} AS ${quoteName(column.name)}`),
+    ...renamed.map((column) => {
+      const source = quoteName(column.physicalName!);
+      return `${cleansedColumn(table, column, source) ?? source} AS ${quoteName(column.name)}`;
+    }),
     ...timestamps.map((name) => `CAST(${quoteName(name)} AS TIMESTAMP) AS ${quoteName(name)}`),
+    ...cleansed.map(({ column, expression }) => `${expression} AS ${quoteName(column.name)}`),
   ];
   return `* EXCEPT (${sources.join(", ")}), ${aliases.join(", ")}`;
 }

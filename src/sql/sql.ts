@@ -2,9 +2,25 @@
 import type { ResolvedTable } from "@ingestron/definitions";
 import { Liquid } from "liquidjs";
 import { templatesFolder } from "../folders.js";
-import { renderQuery } from "./query.js";
+import {
+  cleansedQuery,
+  deduplicated,
+  failedChecks,
+  qualifyOf,
+  quarantineComment,
+} from "./cleanse.js";
+import { quoteName, renderQuery } from "./query.js";
 import { pythonData } from "./python-data.js";
-import { changeData, localText, sourceData, tableData } from "./sql-data.js";
+import {
+  changeData,
+  localName,
+  localText,
+  sourceData,
+  tableData,
+  type SourceData,
+  type TableData,
+} from "./sql-data.js";
+import { sqlString } from "./text.js";
 
 const engine = new Liquid({
   root: templatesFolder,
@@ -61,17 +77,48 @@ export function sqlFile(table: ResolvedTable, header: string, catalog: string): 
 }
 
 function streamingTable(table: ResolvedTable, header: string, catalog: string): SqlFile {
-  const data = {
-    header,
-    table: tableData(table, "STREAMING TABLE", catalog),
-    source: sourceData(table, true),
-  };
-  if (table.store?.settings.mode === "append")
-    return { template: "streaming-table.sql.liquid", data, extension: "sql" };
+  const kind = "STREAMING TABLE";
+  const source = sourceData(table, true);
+  const data = { header, table: tableData(table, kind, catalog), source };
+  if (table.store?.settings.mode === "append") {
+    const rows = `(\n${readFiles(source)}\n) AS checked`;
+    const quarantine = quarantineData(table, kind, catalog, rows);
+    return {
+      template: "streaming-table.sql.liquid",
+      data: { ...data, quarantine },
+      extension: "sql",
+    };
+  }
+  const cdc = changeData(table, catalog);
+  const quarantine = quarantineData(table, kind, catalog, `STREAM(${cdc.changes})`);
   return {
     template: "change-data.sql.liquid",
-    data: { ...data, cdc: changeData(table, catalog) },
+    data: { ...data, cdc, quarantine },
     extension: "sql",
+  };
+}
+
+/** The `read_files` select of a table, as the read-files template writes it. */
+function readFiles(source: SourceData): string {
+  return engine.renderFileSync("read-files", { source }) as string;
+}
+
+/** What the quarantine template reads; empty when the table keeps no quarantine table. */
+function quarantineData(
+  table: ResolvedTable,
+  kind: TableData["kind"],
+  catalog: string,
+  rows: string,
+): object | "" {
+  const failed = failedChecks(table);
+  if (!failed || !table.quarantine) return "";
+  return {
+    table: table.name,
+    kind,
+    target: quoteName(localName(table.quarantine.fullName, catalog)),
+    comment: sqlString(quarantineComment(table)),
+    rows,
+    ...failed,
   };
 }
 
@@ -83,13 +130,34 @@ function materialisedView(table: ResolvedTable, header: string, catalog: string)
     ? renderQuery(table.transform.code, Object.fromEntries(inputs))
     : { sql: "" };
   // The sql method's check has already reported SQL that cannot be rendered.
-  const query = "sql" in rendered ? rendered.sql : "";
+  const code = "sql" in rendered ? rendered.sql : "";
   const source = table.ingest
     ? sourceData(table, false)
     : { stream: false, select: "*", path: "", options: [] };
+  const query = code ? cleansedQuery(table, code) : filesQuery(table, source);
+  const rows = query || readFiles(source);
+  const kind = "MATERIALIZED VIEW";
   return {
     template: "materialised-view.sql.liquid",
-    data: { header, table: tableData(table, "MATERIALIZED VIEW", catalog), source, query },
+    data: {
+      header,
+      table: tableData(table, kind, catalog),
+      source,
+      query,
+      quarantine: quarantineData(table, kind, catalog, `(\n${rows}\n) AS checked`),
+    },
     extension: "sql",
   };
+}
+
+/**
+ * A materialised view's query over files when it deduplicates: `QUALIFY` after
+ * `read_files(…)`, in a `SELECT` of its own when columns are selected under their
+ * contract names. Empty when it does not deduplicate, and the template reads the files.
+ */
+function filesQuery(table: ResolvedTable, source: SourceData): string {
+  const qualify = qualifyOf(table);
+  if (!qualify) return "";
+  const read = readFiles(source);
+  return source.select === "*" ? `${read}\n${qualify}` : deduplicated(table, read, "cleansed");
 }

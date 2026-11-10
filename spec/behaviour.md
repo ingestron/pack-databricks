@@ -43,7 +43,8 @@ writing stopped part way. The grants files are run by hand.
 
 The standard's intent adds to these files, never adds a file: retries,
 timeouts, concurrency and alerts in the job, the event log in the pipelines,
-and audit and rescued columns in a table's SQL (section 2).
+audit and rescued columns, cleansing, deduplicating and a quarantine table in
+a table's SQL or Python file (sections 2 and 8.5).
 
 `build(model)` gives the same layout for one environment, with one target and
 every value as the model resolves it. It is the fold property's render
@@ -106,10 +107,15 @@ What `build` writes, which the folded bundle also follows:
   before. A destination id that differs becomes a variable named from its
   place, such as `alerts_id`. Other alerts whose number differs between
   environments cannot be folded: the job file is `ENVIRONMENTS_DIFFER`.
-- **Event log.** With quality results (the model's `qualityResults`), the
-  pipeline that builds the tables and each Lakeflow Connect ingestion pipeline
-  have `event_log: { catalog, schema, name: <pipeline>_event_log }`, in the
-  pipeline's own catalog and schema. A gateway has none.
+- **Event log.** A pipeline publishes its event log, where the expectation
+  metrics are, when the standard keeps quality results (the model's
+  `qualityResults`) or any table the pipeline builds resolves
+  `quality.results: true` (from its layer or itself). The pipeline that builds
+  the tables and each Lakeflow Connect ingestion pipeline then have
+  `event_log: { catalog, schema, name: <pipeline>_event_log }`, in the
+  pipeline's own catalog and schema. A gateway has none. A project that sets
+  `quality.results` only in the standard gets what it got before tables could
+  set it.
 - **Audit and rescued columns.** Only a streaming table that reads files with
   `read_files` adds them (the changes table of a change-data table included);
   a materialised view adds none, whether it reads files or other tables
@@ -225,15 +231,17 @@ places where values differ in the order `compareTargets` gives them.
 - **In a PySpark transform's file** (`src/<pipeline>/**/*.py`), a variable
   inside a double-quoted text the pack writes, such as the table's `name` or an
   input's name, is read with `spark.conf.get("ingestron.<name>")`:
-  - before the table's function (the decorators, evaluated when the file
-    loads), each value is read once into a module-level constant
+  - outside the functions the pack writes (`def ingestron_…`: the table's
+    function, and with cleansing or quarantine the functions of section 8.5),
+    as in the decorators, which are evaluated when the file loads, each value
+    is read once into a module-level constant
     `ingestron_<name>`, under the comment
     `# Values that differ between environments, from the pipeline's configuration.`
     above the first decorator, and the text becomes an f-string, with braces in
     the rest of the text doubled: `"⟦schema_silver⟧.totals"` becomes
     `f"{ingestron_schema_silver}.totals"`;
-  - inside the function, which builds the transform's inputs, the read stays in
-    the body, joined to the rest of the text:
+  - inside such a function, which builds the transform's inputs, the read
+    stays in the body, joined to the rest of the text:
     `spark.conf.get("ingestron.schema_bronze") + ".orders"`. The pipeline gets the
     configuration `ingestron.<name>: ${var.<name>}`, as for SQL. A variable in
     the transform's own code, which the pack copies as it is, is refused
@@ -450,9 +458,18 @@ The pack's tests check, on synthetic projects:
 - minimality: a value the same in every target stays literal;
 - the golden files in `test/golden`: a retail-shaped project with dev and
   prod, and with dev, test and prod, a PySpark transform whose schemas
-  differ by environment, and the retail project under a kit's standard
+  differ by environment, the retail project under a kit's standard
   (`standards`: audit and rescued columns, the event log, retries, a timeout,
-  queueing, and failure and slow alerts, with dev, test and prod).
+  queueing, and failure and slow alerts, with dev, test and prod), and a
+  synthetic project for quality and cleansing (`quality`, with dev and prod:
+  every rule kind and action, every cleansing operation, a time zone
+  conversion from `Europe/London`, deduplicate, quarantine and per-table
+  results, on a bronze table and the silver tables that read it, in SQL and in
+  PySpark);
+- that every bundle file of the `quality` golden is valid for the bundle
+  schema that `databricks bundle schema` prints with the Databricks CLI
+  v1.23.0 or later. The test skips, saying why, when that CLI is not
+  installed.
 
 ## 8. Intent
 
@@ -488,13 +505,16 @@ does with each value. The sources of the Databricks features are in
 | `retention.time_travel`, `log`          | `delta.deletedFileRetentionDuration`, `delta.logRetentionDuration`          | not yet   |
 | `retention.landed_files`                | Kept by the landing pack                                                    | elsewhere |
 | `quality.results`                       | The pipeline's `event_log`, published to a table                            | used      |
-| `quality.rules` (every kind)            | A Lakeflow expectation, `CONSTRAINT … EXPECT (…)`                           | used      |
+| `quality.rules` (every kind)            | A Lakeflow expectation, `CONSTRAINT … EXPECT (…)`, written from the rule    | used      |
 | `quality.actions: warn`                 | `EXPECT` alone: the row is kept and counted                                 | used      |
 | `quality.actions: drop`                 | `ON VIOLATION DROP ROW`                                                     | used      |
 | `quality.actions: fail`                 | `ON VIOLATION FAIL UPDATE`                                                  | used      |
 | `quality.table-checks`                  | Counts in the after-refresh task, when `manage.checks` is on                | used      |
-| `quality.quarantine`                    | The documented quarantine pattern                                           | not yet   |
-| `cleanse.*`, `deduplicate`              | In the table's `SELECT`                                                     | not yet   |
+| `quality.quarantine`                    | `<table>_quarantine`, after the documented quarantine pattern               | used      |
+| `cleanse.trim`, `empty`, `map`, `case`  | `trim`, `nullif`, `CASE`, `upper` or `lower`, in the table's `SELECT`       | used      |
+| `cleanse.default`                       | `coalesce`, in the table's `SELECT`                                         | used      |
+| `cleanse.timezone`                      | `to_utc_timestamp` and `from_utc_timestamp`; `convert_timezone` for NTZ     | used      |
+| `deduplicate`                           | `QUALIFY row_number() … = 1`, in a materialised view                        | used      |
 | `operations.retries`                    | The pipeline task's `max_retries` and `min_retry_interval_millis`           | used      |
 | `operations.timeout`                    | The job's `timeout_seconds`                                                 | used      |
 | `operations.concurrency`                | The job's `max_concurrent_runs` and `queue`                                 | used      |
@@ -505,7 +525,8 @@ does with each value. The sources of the Databricks features are in
 | `operations.schedule: flow`             | A refresh job for each flow                                                 | not yet   |
 
 Every `used` feature is generally available on the page the pack checked on
-2026-11-09, or for expectations on 2026-11-10 (references.md), except the run duration threshold behind
+2026-11-09, or for expectations, quarantine, cleansing, time zones and
+deduplicate on 2026-11-10 (references.md), except the run duration threshold behind
 `operations.alerts: slow`, which the job configuration page labels Public
 Preview: a standard with `features: ga` that raises slow alerts gets
 `PREVIEW_FEATURE`. `history: bitemporal` is Beta, which is why it is not yet.
@@ -522,16 +543,23 @@ one is missing. An entry is one of:
   step that lands the files keeps or adds them. Where this pack reads the
   files in place (the `files` method) or the source (`lakeflow-connect`),
   nothing lands them, so they are `not-yet` for those methods;
+- `not-applicable` with the reason, where the pack's platform cannot do it
+  (`deduplicate` on a streaming table, below);
 - `not-yet` with the reason "Planned.", for every other path and value: the
-  table above is the target, not what the pack builds today. Among them are
-  `quality.quarantine`, every `cleanse` path and `deduplicate`.
+  table above is the target, not what the pack builds today.
 
-The quality entries (`quality.rules`, `quality.actions` and
-`quality.table-checks`) are the pack's, for every method. Table checks still
-need `manage.checks`: with it off, the definitions package reports
-`CAPABILITY_OFF`, not `NOT_APPLIED`. `lakeflow-connect` keeps what it did
-before: checks written in the definitions are an error of the table, since
-managed ingestion cannot run expectations.
+The quality and cleansing entries (`quality.rules`, `quality.actions`,
+`quality.table-checks`, `quality.quarantine`, `quality.results` and every
+`cleanse` path) are the pack's, for every method but `lakeflow-connect`, all
+`used` with no `onlyWhere`: the pack checks, cleanses and quarantines whatever
+the layer's `does` says, as the model gives it. Table checks still need
+`manage.checks`: with it off, the definitions package reports
+`CAPABILITY_OFF`, not `NOT_APPLIED`. `deduplicate` is the pack's only as
+`not-applicable` ("A streaming table keeps one row per key through its
+history, latest or full; deduplicate in a materialised view."), and `used` by
+`materialised-view`. A streaming table that deduplicates is judged by the
+definitions package first (`DEDUPLICATE_MODE`: an error when it appends,
+redundant when it keeps history), so this entry is a fallback.
 
 A method declares only what differs from the pack:
 
@@ -542,13 +570,26 @@ A method declares only what differs from the pack:
   are added by streaming tables over files."); `load.deletes` is
   `not-applicable` ("A materialised view is recomputed; a delete condition
   needs a streaming table with history.");
+- `materialised-view`: also `deduplicate`, used (section 8.5);
 - `lakeflow-connect`: `load.mode: files` is `not-applicable` ("Managed
   ingestion reads the source, not files."); `history: none`, `latest` and `full`
   are used, as the connector's append mode and `scd_type`; `rescued` is
   `not-applicable` ("Managed ingestion has no rescued data column."), as are
   `audit: loaded_at`, `source_file` and `source_modified_at` ("Managed
   ingestion writes the table; it adds no metadata columns."); and
-  `storage.clustering` is `not-yet` ("Planned.").
+  `storage.clustering` is `not-yet` ("Planned."). Managed ingestion writes
+  the table as the source gives it, so it cannot check rows, cleanse or
+  deduplicate: `quality.rules`, `quality.actions` and `quality.quarantine`
+  are `not-applicable` ("Managed ingestion writes the table as the source
+  gives it; check it in a transform in the next layer."), every `cleanse`
+  path is too ("…; cleanse it in a transform in the next layer."), and so is
+  `deduplicate` ("…; deduplicate it in a transform in the next layer."). The
+  definitions package reports each rule, action and operation as
+  `NOT_APPLIED`; the pack reports no problem of its own for an expectation
+  on such a table, and generates no expectation there. `quality.table-checks`
+  and `quality.results` stay the pack's: the after-refresh task counts table
+  checks over every table, and the ingestion pipeline publishes its event
+  log.
 
 The step that writes the table judges `load.deletes` (definitions
 specification, section 11.5): the store step, or `lakeflow-connect`, which
@@ -598,3 +639,132 @@ field. A project that still writes a moved field at the top gets
 `PLATFORM_FIELD_MOVED` (a warning), and the output is the same. The pack reads
 each field from either place; `databricks.warehouse_id` is listed with the
 other Platform settings the pack reads.
+
+### 8.5 Quality and cleansing
+
+The model says what each table checks, cleanses, deduplicates and quarantines
+(definitions specification, sections 6 and 11.7). The pack writes it in the
+table's own SQL or Python file, as plain Spark SQL. The sources are in
+[references.md](references.md), under "Quality and cleansing".
+
+**Checks.** Each expectation is a constraint, as before:
+`CONSTRAINT <name> EXPECT (<condition>)`, then nothing for `warn`,
+`ON VIOLATION DROP ROW` for `drop` and `ON VIOLATION FAIL UPDATE` for `fail`.
+The condition is written from the expectation's `rule` when it has one, else
+it is the expectation's `check` text. With `<c>` the column in backticks and
+`<v>` a value (a number as it is, any other value as SQL text):
+
+| `kind`       | Condition                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `notNull`    | `<c> IS NOT NULL`                                                                                  |
+| `in`         | `<c> IS NULL OR <c> IN (<v>, …)`; `<c> IS NOT NULL AND <c> IN (<v>, …)` without `allowNull`        |
+| `notIn`      | as `in`, with `NOT IN`                                                                             |
+| `pattern`    | `<c> IS NULL OR <c> RLIKE <v>`                                                                     |
+| `length`     | `<c> IS NULL OR length(<c>) >= <min>`, and `length(<c>) <= <max>`                                  |
+| `range`      | `<c> IS NULL OR <c> >= <min>`, and `<c> <= <max>`; `>` and `<` when `exclusive`                    |
+| `multipleOf` | `<c> IS NULL OR <c> % <value> = 0`                                                                 |
+| `items`      | `<c> IS NULL OR size(<c>) >= <min>`, `size(<c>) <= <max>`, `size(array_distinct(<c>)) = size(<c>)` |
+
+A rule with more than one limit joins them with `AND` after `<c> IS NULL OR`.
+These are the texts the definitions package writes in `check`, so a table
+gets the same file whichever is read. A PySpark transform's decorators and
+the quarantine table use the same conditions.
+
+**Cleansing.** Each column in `cleanse.columns` is selected as an expression
+of the column, each operation applied to the result of the one before, in
+the model's order:
+
+| Operation  | Expression                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------- |
+| `timezone` | `to_utc_timestamp(<x>, '<from>')` to `UTC`; else `from_utc_timestamp(to_utc_timestamp(<x>, '<from>'), '<to>')` |
+|            | `convert_timezone('<from>', '<to>', <x>)` when the column's type is `TIMESTAMP_NTZ`                            |
+| `trim`     | `trim(<x>)`                                                                                                    |
+| `empty`    | `nullif(<x>, '')`                                                                                              |
+| `map`      | `CASE <x> WHEN <key> THEN <value> … ELSE <x> END`, the keys in the order written; a null value is `NULL`       |
+| `case`     | `upper(<x>)` or `lower(<x>)`                                                                                   |
+| `default`  | `coalesce(<x>, <value>)`                                                                                       |
+
+`<x>` starts as the column. A value is written for the column's
+`logicalType`: a number as it is for `integer` and `number` (a `map` key,
+which is text, too); `TRUE` or `FALSE` for `boolean`; `DATE '<text>'` for
+`date`; `TIMESTAMP '<text>'` for `timestamp` (`TIMESTAMP_NTZ '<text>'` when the
+column's type is `TIMESTAMP_NTZ`); any other value as SQL text. A column's
+type is its contract `physicalType`, else the standard's type for its
+`logicalType`.
+
+The expressions go in the `SELECT` that builds the table's rows:
+
+- **A table that reads files** (a streaming table, the changes table of a
+  change-data table, or a materialised view over `read_files`): the select
+  list is `* EXCEPT (<columns>), …` as for renamed columns (section 2), and
+  each cleansed column is `<expression> AS <c>` after the renamed columns and
+  text timestamps, in the contract's order. A renamed column that is cleansed
+  starts from its source name and is selected once, cleansed. Cleansed
+  columns therefore come after the others. A change-data table cleanses its
+  changes, so AUTO CDC keeps cleansed rows.
+- **A transform's materialised view** wraps the transform's query:
+  `SELECT * EXCEPT (<columns>), <expression> AS <c>, … FROM (<query>) AS source`,
+  the query on lines of its own. On this pack a transform's table is always a
+  materialised view, and a materialised view reads no `STREAM()`, so no
+  wrapped query carries one; cleansing never goes in the transform's own
+  `SELECT`.
+- **A PySpark transform** calls the transform in a function
+  `ingestron_<table>_rows()`, then sets each cleansed column with
+  `rows.withColumns({"<c>": ingestron_expr("<expression>"), …})`, which
+  replaces the columns of those names. `ingestron_expr` is `pyspark.sql.functions.expr`,
+  imported under that name so it does not clash with the transform's code.
+  The table's function returns `ingestron_<table>_rows()`.
+
+**Deduplicate** happens only in a materialised view: after cleansing,
+`QUALIFY row_number() OVER (PARTITION BY <primary key> ORDER BY <c> DESC, …) = 1`,
+each `order_by` column in the order written. The window must read the columns
+as selected, cleansed or renamed, and a name that is both a column read and a
+column selected could be read either way. So `QUALIFY` follows `read_files(…)`
+only when the select list is `*`; otherwise, and for a transform's query, it
+ends a `SELECT` of its own: `SELECT * FROM (<the rows>) AS cleansed QUALIFY …`,
+or `AS source` around a transform's query that cleanses no column. A PySpark
+transform adds the same window as a column `_ingestron_row`, keeps the rows
+where it is `1` and drops the column. A streaming table writes nothing for
+`deduplicate`: the definitions package has reported `DEDUPLICATE_MODE`, an
+error when the table appends and redundant when AUTO CDC already keeps one row
+per key.
+
+**Quarantine.** A table with `quarantine` in the model keeps its own
+constraints, so its `drop` checks still drop the failing rows and count them
+in the event log. After the table's statements, the same file builds
+`<table>_quarantine` (`quarantine.fullName`, named as the table is), the same
+kind of table, from the same rows:
+
+```sql
+-- Rows that a check with the action drop removed from customers, with the checks they failed.
+CREATE OR REFRESH MATERIALIZED VIEW `silver`.`customers_quarantine`
+COMMENT 'Rows of customers that failed a check that drops rows; _failed_checks names the checks.'
+AS SELECT *, filter(array(IF(<condition>, NULL, '<name>'), …), name -> name IS NOT NULL) AS _failed_checks
+FROM (
+<the table's query>
+) AS checked
+WHERE NOT ((<condition>) AND …);
+```
+
+The conditions are those of the table's `drop` checks, in the table's order.
+This is Databricks' quarantine pattern: the rows are flagged with
+`NOT ((<rule>) AND …)` over the checked rows, and those it flags are kept apart
+from the valid ones. The pattern flags rows in one table and splits it with
+views; here the table stays the table it was, and the quarantine table reads
+the same rows again, keeping only the flagged ones. `_failed_checks` is an
+array of the names of the checks the row failed.
+
+- A streaming table that appends reads the files again:
+  `FROM (SELECT … FROM STREAM read_files(…)) AS checked`, so the quarantine
+  table sees the cleansed rows.
+- A change-data table's quarantine reads its changes table,
+  `FROM STREAM(<changes>)`, which holds the cleansed changes.
+- A materialised view's reads the view's query, with its cleansing and
+  `QUALIFY`, or `read_files(…)` as the view does.
+- A PySpark transform's is a second `@dp.materialized_view` with the name
+  and comment above, whose function `ingestron_<table>_quarantine()` returns
+  `ingestron_<table>_rows()` with the column `_failed_checks` added by
+  `withColumn` and the rows kept by `filter("NOT ((<condition>) AND …)")`.
+
+The quarantine table has its comment and no constraints, clustering or table
+properties. One check is written `NOT (<condition>)`.

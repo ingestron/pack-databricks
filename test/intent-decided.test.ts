@@ -10,6 +10,15 @@ function resolve(files: Record<string, string>, environment = "dev") {
   return resolveDefinitions(memoryFiles(files), { packs: [databricks], environment });
 }
 
+/** The intent a table's steps do not apply, without the checks managed ingestion does not apply. */
+function notApplied(diagnostics: ReturnType<typeof resolve>["diagnostics"]) {
+  return diagnostics.filter(
+    (item) =>
+      item.code === "NOT_APPLIED" &&
+      !item.message.includes("Managed ingestion writes the table as the source gives it"),
+  );
+}
+
 describe("the pack's Kafka rule", () => {
   // The Kafka starter, with its topics named and the flow's history left to the standard.
   const kafka: Record<string, string> = {
@@ -54,7 +63,7 @@ describe("the pack's Kafka rule", () => {
 
   it("gives the history its append mode stands for when nothing declares one", () => {
     const { model, diagnostics } = resolve(kafka);
-    expect(diagnostics.filter((item) => item.code === "NOT_APPLIED")).toEqual([]);
+    expect(notApplied(diagnostics)).toEqual([]);
     const table = model!.tables[0]!;
     expect(table.ingest?.settings.mode).toBe("append");
     expect(table.intent.history).toBe("none");
@@ -65,7 +74,7 @@ describe("the pack's Kafka rule", () => {
     const layered = `${kafka["standard.yaml"]}layers: [{ name: bronze, history: latest }, silver, gold]\n`;
     const { model, diagnostics } = resolve({ ...kafka, "standard.yaml": layered });
     expect(model!.tables[0]!.ingest?.settings.mode).toBe("append");
-    expect(diagnostics.filter((item) => item.code === "NOT_APPLIED")).toMatchObject([
+    expect(notApplied(diagnostics)).toMatchObject([
       {
         message:
           "history: latest isn't applied on databricks: the pack's rule for connector kafka writes \"mode: append\".",

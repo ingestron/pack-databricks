@@ -103,7 +103,8 @@ function connectFiles(model: ResolvedModel, groups: ConnectGroup[], output: Outp
       files[`resources/${group.gateway}.pipeline.yml`] = { headers, data };
     }
     const ingestion = ingestionPipeline(group, keys);
-    const pipeline = { ...ingestion, ...pipelineExtras(model), ...eventLog(model, ingestion) };
+    const log = eventLog(model, group.tables, ingestion);
+    const pipeline = { ...ingestion, ...pipelineExtras(model), ...log };
     const data = { resources: { pipelines: { [group.ingestion]: pipeline } } };
     files[`resources/${group.ingestion}.pipeline.yml`] = { headers, data };
     return group.continuous

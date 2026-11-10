@@ -49,7 +49,8 @@ export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean
 function tablePlace(model: ResolvedModel, index: number, rest: string[], pipeline: boolean): Place {
   const table = model.tables[index]!;
   const [part, key, ...more] = rest;
-  if (part === "fullName") return namePlace(model, table.layer, table.name, key!, pipeline);
+  const name = fullNameAt(table.name, rest);
+  if (name) return namePlace(model, table.layer, name.table, name.key, pipeline);
   if (part === "ingest" && key === "connection" && more[0] === "settings") {
     const id = table.ingest!.connection.id;
     const setting = more.slice(1);
@@ -66,6 +67,17 @@ function tablePlace(model: ResolvedModel, index: number, rest: string[], pipelin
     name: variableName(table.name, ...path.filter((item) => item !== "settings")),
     description: `The value of ${path.join(".")} for table ${table.name}.`,
   };
+}
+
+/**
+ * The table and the part of its full name at a place: the table's own, or its quarantine
+ * table's, which is in the table's catalog and schema, so the two fold alike.
+ */
+function fullNameAt(table: string, [part, key, next]: string[]) {
+  if (part === "fullName") return { table, key: key! };
+  if (part === "quarantine" && key === "fullName")
+    return { table: `${table}_quarantine`, key: next! };
+  return undefined;
 }
 
 function folderOf(setting: string, step: string): string {

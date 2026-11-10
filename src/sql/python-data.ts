@@ -1,6 +1,8 @@
 // Template data for a PySpark transform's Python file. Python string and
 // dict literals are written as JSON, which Python reads the same way.
 import type { ResolvedTable } from "@ingestron/definitions";
+import { cleansedByName, failedChecks, quarantineComment, rowNumber } from "./cleanse.js";
+import { conditionOf } from "./conditions.js";
 import { localName, localText } from "./sql-data.js";
 
 const decorators = {
@@ -21,6 +23,19 @@ export interface PythonTableData {
   wrapper: string;
   function: string;
   inputs: { name: string; table: string }[];
+  /** The function that returns the cleansed, deduplicated rows; empty when none is needed. */
+  rows: "" | { function: string; columns: { name: string; expression: string }[]; window: string };
+  /** The quarantine table's decorator and function; empty without one. */
+  quarantine:
+    | ""
+    | {
+        name: string;
+        comment: string;
+        function: string;
+        column: string;
+        failed: string;
+        keep: string;
+      };
 }
 
 /** Everything materialised-view.py.liquid needs, in the pipeline whose catalog is `catalog`. */
@@ -40,7 +55,7 @@ export function pythonData(table: ResolvedTable, header: string, catalog: string
         const checks = table.expectations.filter((item) => item.action === action);
         return {
           decorator: decorators[action],
-          checks: pythonDict(checks.map((item) => [item.name, item.check])),
+          checks: pythonDict(checks.map((item) => [item.name, conditionOf(item)])),
           count: checks.length,
         };
       })
@@ -51,6 +66,39 @@ export function pythonData(table: ResolvedTable, header: string, catalog: string
       name: JSON.stringify(name),
       table: JSON.stringify(localText(full, catalog)),
     })),
+    ...rowsAndQuarantine(table, catalog),
+  };
+}
+
+/** The rows function, when the table cleanses, deduplicates or quarantines, and the quarantine. */
+function rowsAndQuarantine(
+  table: ResolvedTable,
+  catalog: string,
+): Pick<PythonTableData, "rows" | "quarantine"> {
+  const failed = failedChecks(table);
+  if (!table.cleanse && !failed) return { rows: "", quarantine: "" };
+  const rows = `ingestron_${table.name}_rows`;
+  const window = rowNumber(table);
+  return {
+    rows: {
+      function: rows,
+      columns: cleansedByName(table).map(({ name, expression }) => ({
+        name: JSON.stringify(name),
+        expression: JSON.stringify(expression),
+      })),
+      window: window ? JSON.stringify(window) : "",
+    },
+    quarantine:
+      failed && table.quarantine
+        ? {
+            name: JSON.stringify(localName(table.quarantine.fullName, catalog)),
+            comment: JSON.stringify(quarantineComment(table)),
+            function: `ingestron_${table.name}_quarantine`,
+            column: JSON.stringify(failed.column),
+            failed: JSON.stringify(failed.failed),
+            keep: JSON.stringify(failed.keep),
+          }
+        : "",
   };
 }
 
