@@ -57,11 +57,22 @@ function policies(bronze: (name: string) => string, silver: string, gold: string
   return [...bronzeFirst, secret(silver), secret(gold)];
 }
 
+/** The project's tables, each followed by the tables the pack creates beside it. */
 const tables = [
   table("bronze", "orders"),
+  table("bronze", "orders_changes"),
+  table("bronze", "orders_quarantine"),
   table("bronze", "customers"),
+  table("bronze", "customers_quarantine"),
   table("silver", "daily_sales"),
   table("gold", "top_customers"),
+];
+
+/** The tables the pack creates beside a table, with the classified columns they copy. */
+const companions = [
+  { name: "orders_changes", of: "orders", columns: ["card_last4"] },
+  { name: "orders_quarantine", of: "orders", columns: ["card_last4"] },
+  { name: "customers_quarantine", of: "customers", columns: ["email", "country"] },
 ];
 
 describe("masks and row filters on managed schemas", () => {
@@ -130,7 +141,8 @@ describe("masks and row filters without managed schemas", () => {
   const governance = governanceOf(built(maskedTables).out[script]);
 
   it("makes each policy on the tables, which the project owns", () => {
-    expect(governance?.policies).toEqual(
+    const companion = new Set(companions.map((item) => table("bronze", item.name)));
+    expect(governance?.policies.filter((policy) => !companion.has(policy.on))).toEqual(
       policies(
         (name) => table("bronze", name),
         table("silver", "daily_sales"),

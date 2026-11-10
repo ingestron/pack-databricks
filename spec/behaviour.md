@@ -1017,12 +1017,31 @@ such as on a column whose type the contract does not give, they return
 - `hash`: `CASE WHEN schema_of_variant(val) = 'STRING' THEN sha2(try_cast(val AS STRING), 256)::VARIANT ELSE NULL::VARIANT END`;
 - `redact`: `CASE WHEN schema_of_variant(val) = 'STRING' THEN '****'::VARIANT ELSE NULL::VARIANT END`.
 
+**The tables beside a table.** The pack creates tables of its own beside some
+tables, which hold their columns under the contract's names:
+
+- `<table><changes_suffix>`, the changes a streaming table that keeps history
+  reads (`_changes` by default), a streaming table;
+- `<table>_quarantine`, the rows a check with the action drop removes, of the
+  table's kind.
+
+A private table, such as the one a quarantined streaming table reads its
+files into, is not published, so no one reads it. With `manage.masks` or
+`manage.filters` on, these tables are covered as their table is, or their
+copies would show what the policies hide: with `manage.tags`, the task sets
+each of the contract's column tags on them too, the classification included
+(`ALTER <kind> <table> ALTER COLUMN <column> SET TAGS (…)`, after the table's
+own tags), so the policies on a schema match them; and when the policies are
+on tables, each gets its table's policies. With both switches off they are
+not tagged, as before.
+
 **Policies.** Where the policies go depends on who owns the schemas:
 
 - with `manage.schemas` on, the bundle creates the project's schemas, so the
   policies are `ON SCHEMA <catalog>.<schema>`, once for each schema;
 - otherwise the schemas may be shared, so the policies are
-  `ON TABLE <catalog>.<schema>.<table>`, on the project's own tables only.
+  `ON TABLE <catalog>.<schema>.<table>`, on the project's own tables only,
+  and on the tables the pack creates beside them.
 
 On each schema or table, in the order of the model's tables:
 
@@ -1067,9 +1086,9 @@ are SQL strings.
 before and makes no more. It lists the policies with `SHOW POLICIES ON
 <securable>`, which lists only those attached to it directly, on each of the
 project's own places: each schema of its tables when the policies are on
-schemas, and each of its tables in either case, so policies left on the
-tables from before the schemas were managed go too. A table that ends at the
-landed files has no place. A policy is dropped, with `DROP POLICY <name> ON
+schemas, and each of its tables, with the tables the pack creates beside
+them, in either case, so policies left on the tables from before the schemas
+were managed go too. A table that ends at the landed files has no place. A policy is dropped, with `DROP POLICY <name> ON
 <securable>`, only when all of these hold:
 
 - its name (the row's `policy_name`) starts with `ingestron_mask_` and
@@ -1080,6 +1099,20 @@ landed files has no place. A policy is dropped, with `DROP POLICY <name> ON
 Every other policy is kept: another team's, and the task's own of a switch
 that is off. `stale_drops(rows, place, owned)` is a function of the task that
 reads nothing else, so it is tested over synthetic rows.
+
+When `manage.schemas` is turned off after the policies were on the schemas,
+the schemas are no longer the project's own, so the task does not touch
+their policies: the `ingestron_` policies on them stay, beside the new ones
+on the tables, and may resolve two masks on one column. Drop them by hand
+(`DROP POLICY <name> ON SCHEMA <schema>`). Neither the task nor `request` can
+tell that the schemas were managed before, so neither names them.
+
+**Policy names.** A mask policy is named after its classification, and Unity
+Catalog names do not tell letter case apart. So the pack's `check` refuses
+masked classifications that differ only in letter case, such as `secret` and
+`Secret`: `the masked classifications "secret" and "Secret" differ only in
+letter case, so their policies ingestron_mask_secret and ingestron_mask_Secret
+would clash; write them the same way`. Filter names are lower case already.
 
 **The after-refresh task.** With `manage.masks` or `manage.filters` on, the
 task holds `GOVERNANCE`: `functions`, each `{ name, returns }`; `policies`,
@@ -1096,13 +1129,14 @@ filters, each only when the task does it.
 **`prerequisites/<environment>.sql`**, with `manage.masks` or
 `manage.filters` on, gives the run_as identity once:
 
-- `USE CATALOG` on the catalog of `governance.functions` and of each of the
-  team's functions in another schema;
-- `USE SCHEMA, CREATE FUNCTION` on `governance.functions`, where the task
-  creates the built-in masks;
-- `USE SCHEMA` on each other schema of the team's functions, and `EXECUTE` on
-  each of the team's functions that an applied mask or filter names: a policy
-  needs `EXECUTE` on its function;
+- `USE CATALOG` on the catalog of each schema below, unless the managed
+  schemas' grant already gives it (`USE CATALOG, CREATE SCHEMA`);
+- `USE SCHEMA` on the schema of each function the policies use: the built-in
+  masks, in `governance.functions`, and each of the team's functions;
+  `CREATE FUNCTION` too on `governance.functions` when the task creates a
+  built-in mask there;
+- `EXECUTE` on each of the team's functions that an applied mask or filter
+  names: a policy needs `EXECUTE` on its function;
 - with policies on schemas, `MANAGE` on each of the project's schemas, which
   making and dropping a policy there needs. The bundle creates those schemas,
   so these lines are run after the first deployment, unless run_as deploys and
@@ -1120,4 +1154,9 @@ when any mask or filter is applied:
 - that everyone who reads the tables uses serverless compute or Databricks
   Runtime 16.4 or later, since older runtimes cannot read a table with a
   policy;
-- the governed tag, as in section 8.6.
+- the governed tag of the classification, as in section 8.6;
+- each other governed tag key an applied row filter matches with `{ tag }`
+  (policies match governed tags only, so a filter on a key that is not one
+  matches nothing and hides no row), with the values the filters and the
+  contracts' column tags give it, when they give any:
+  ``Governed tag `region`, which a row filter matches; an account administrator creates it, and the run_as identity needs ASSIGN on it.``

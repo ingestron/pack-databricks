@@ -3,6 +3,8 @@ export { accessItems, keptPrincipals, tableGrants, exactOn } from "./access.js";
 export type { AccessItem, TableGrant } from "./access.js";
 export { applyContract, tagParts } from "./apply-contract.js";
 export {
+  appliedFilters,
+  appliedMasks,
   functionsSchema,
   governanceOf,
   maskFunctionsUsed,

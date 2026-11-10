@@ -15,7 +15,7 @@ GRANT USE CATALOG, CREATE SCHEMA ON CATALOG `prod_sales` TO `7f3c2a10-0000-4000-
 
 -- Column masks needs:
 --   - Databricks Runtime 16.4 or later to make and to read tables with policies (serverless jobs have it).
---   - USE CATALOG, USE SCHEMA and CREATE FUNCTION on governance.functions for run_as, and EXECUTE on each of the team's functions a mask names.
+--   - USE CATALOG and USE SCHEMA on governance.functions for run_as, CREATE FUNCTION there for the built-in masks, and EXECUTE on each of the team's functions a mask names.
 --   - MANAGE on the schemas when the bundle manages them, since the policies are on the schemas; run_as owns its tables, so policies on tables need nothing more.
 --   - The classification as a governed tag, which an account administrator creates; ingestron request lists it.
 
@@ -24,7 +24,6 @@ GRANT USE CATALOG, CREATE SCHEMA ON CATALOG `prod_sales` TO `7f3c2a10-0000-4000-
 --   - EXECUTE on each filter's function for run_as, with USE CATALOG and USE SCHEMA on its schema.
 --   - MANAGE on the schemas when the bundle manages them, since the policies are on the schemas; run_as owns its tables, so policies on tables need nothing more.
 --   - Each tag the filters match as a governed tag, which an account administrator creates.
-GRANT USE CATALOG ON CATALOG `prod_sales` TO `7f3c2a10-0000-4000-8000-000000000001`;
 GRANT USE CATALOG ON CATALOG `security` TO `7f3c2a10-0000-4000-8000-000000000001`;
 GRANT USE SCHEMA, CREATE FUNCTION ON SCHEMA `prod_sales`.`governance` TO `7f3c2a10-0000-4000-8000-000000000001`;
 GRANT USE SCHEMA ON SCHEMA `security`.`filters` TO `7f3c2a10-0000-4000-8000-000000000001`;

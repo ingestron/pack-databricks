@@ -57,7 +57,7 @@ export const capabilities: Capability[] = [
     does: "Masks each classified column the standard names with a Unity Catalog column mask policy after each refresh, for everyone but run_as and the unmasked principals.",
     needs: [
       "Databricks Runtime 16.4 or later to make and to read tables with policies (serverless jobs have it)",
-      "USE CATALOG, USE SCHEMA and CREATE FUNCTION on governance.functions for run_as, and EXECUTE on each of the team's functions a mask names",
+      "USE CATALOG and USE SCHEMA on governance.functions for run_as, CREATE FUNCTION there for the built-in masks, and EXECUTE on each of the team's functions a mask names",
       "MANAGE on the schemas when the bundle manages them, since the policies are on the schemas; run_as owns its tables, so policies on tables need nothing more",
       "The classification as a governed tag, which an account administrator creates; ingestron request lists it",
     ],

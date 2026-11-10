@@ -5,7 +5,7 @@ import { connectors } from "./methods/index.js";
 import { build } from "./output/index.js";
 import { buildEnvironments } from "./fold/index.js";
 import { request } from "./methods/index.js";
-import { capabilities, tagProblems } from "./methods/index.js";
+import { capabilities, maskNameProblems, tagProblems } from "./methods/index.js";
 import { lakeflowConnect } from "./methods/index.js";
 import { connectGroups, sharedProblems } from "./connect/index.js";
 import { files, materialisedView, sql, streamingTable } from "./methods/index.js";
@@ -101,7 +101,12 @@ export const databricks: Pack = {
       problems.push("classic compute is not supported yet; leave compute.serverless at true");
     if (model.tables.length === 0)
       problems.push("there is nothing to generate: add a flow or a transform");
-    return [...problems, ...tagProblems(model), ...sharedProblems(connectGroups(model))];
+    return [
+      ...problems,
+      ...tagProblems(model),
+      ...maskNameProblems(model),
+      ...sharedProblems(connectGroups(model)),
+    ];
   },
   build,
   buildEnvironments,

@@ -3,7 +3,7 @@
 // the job's schedule, and what exact grants remove.
 import { classificationTag, type RequestSection, type ResolvedModel } from "@ingestron/definitions";
 import { exactOn, keptPrincipals, tableGrants } from "../sql/index.js";
-import { governanceRequest } from "./governance-needs.js";
+import { filterTags, governanceRequest } from "./governance-needs.js";
 
 /** The Databricks sections of the platform request. Nothing here is checked. */
 export function request(model: ResolvedModel): RequestSection[] {
@@ -16,6 +16,7 @@ export function request(model: ResolvedModel): RequestSection[] {
         ...principals(model),
         ...governanceRequest(model, code),
         ...governedTag(model),
+        ...filterTags(model, code, listed),
       ],
     },
     { title: "Schedules", lines: [schedule(model)] },

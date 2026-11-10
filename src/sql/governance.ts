@@ -11,6 +11,7 @@ import {
   type RowFilter,
 } from "@ingestron/definitions";
 import { keptPrincipals } from "./access.js";
+import { companionsOf } from "./companions.js";
 import { quoteName } from "./query.js";
 import { sqlString } from "./text.js";
 
@@ -140,10 +141,23 @@ const onSchemas = (model: ResolvedModel) => model.platform.manage.schemas;
 /** The tables the project keeps in Unity Catalog: not those that end at the landed files. */
 const keptTables = (model: ResolvedModel) => model.tables.filter((table) => !table.endsAtFiles);
 
-const schemaOf = ({ fullName }: ResolvedTable) =>
+/** A table the project keeps, or one the pack creates beside it, whose masks and filters it has. */
+interface Securable {
+  table: ResolvedTable;
+  fullName: ResolvedTable["fullName"];
+}
+
+/** Each table the project keeps, followed by the tables the pack creates beside it. */
+const securables = (model: ResolvedModel): Securable[] =>
+  keptTables(model).flatMap((table) => [
+    { table, fullName: table.fullName },
+    ...companionsOf(table).map(({ fullName }) => ({ table, fullName })),
+  ]);
+
+const schemaOf = ({ fullName }: Securable) =>
   `SCHEMA ${quoteName(`${fullName.catalog}.${fullName.schema}`)}`;
 
-const tableOf = ({ fullName }: ResolvedTable) =>
+const tableOf = ({ fullName }: Securable) =>
   `TABLE ${quoteName(`${fullName.catalog}.${fullName.schema}.${fullName.table}`)}`;
 
 /** The project's schemas as `catalog.schema`, each once, when the policies are on them. */
@@ -197,11 +211,11 @@ function placePolicies(model: ResolvedModel, on: string, tables: ResolvedTable[]
 export function governanceOf(model: ResolvedModel): Governance | undefined {
   const { masks, filters } = model.platform.manage;
   if (!masks && !filters) return undefined;
-  const tables = keptTables(model);
+  const tables = securables(model);
   const groups = new Map<string, ResolvedTable[]>();
   const place = onSchemas(model) ? schemaOf : tableOf;
-  for (const table of tables)
-    groups.set(place(table), [...(groups.get(place(table)) ?? []), table]);
+  for (const item of tables)
+    groups.set(place(item), [...(groups.get(place(item)) ?? []), item.table]);
   const policies = [...groups].flatMap(([on, group]) => placePolicies(model, on, group));
   const places = [...(onSchemas(model) ? [...groups.keys()] : []), ...tables.map(tableOf)].map(
     (on) => ({

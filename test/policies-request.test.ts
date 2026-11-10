@@ -16,7 +16,6 @@ describe("prerequisites.sql with masks and row filters", () => {
     const lines = prerequisites(masked).filter((line) => line.startsWith("GRANT"));
     expect(lines).toEqual([
       `GRANT USE CATALOG, CREATE SCHEMA ON CATALOG \`dev_sales\` TO ${runAs};`,
-      `GRANT USE CATALOG ON CATALOG \`dev_sales\` TO ${runAs};`,
       `GRANT USE CATALOG ON CATALOG \`security\` TO ${runAs};`,
       `GRANT USE SCHEMA, CREATE FUNCTION ON SCHEMA \`dev_sales\`.\`governance\` TO ${runAs};`,
       `GRANT USE SCHEMA ON SCHEMA \`security\`.\`filters\` TO ${runAs};`,
@@ -29,6 +28,35 @@ describe("prerequisites.sql with masks and row filters", () => {
       `GRANT MANAGE ON SCHEMA \`dev_sales\`.\`silver\` TO ${runAs};`,
       `GRANT MANAGE ON SCHEMA \`dev_sales\`.\`gold\` TO ${runAs};`,
     ]);
+  });
+
+  it("gives USE CATALOG once, beside the managed schemas' CREATE SCHEMA", () => {
+    const catalog = prerequisites(masked).filter((line) =>
+      line.startsWith("GRANT USE CATALOG ON CATALOG `dev_sales`"),
+    );
+    expect(catalog).toEqual([]);
+    expect(prerequisites(maskedTables)).toContain(
+      `GRANT USE CATALOG ON CATALOG \`dev_sales\` TO ${runAs};`,
+    );
+  });
+
+  it("gives CREATE FUNCTION only when a built-in mask is created", () => {
+    const files = maskedWith("standard.yaml", (text) =>
+      text.replace("    confidential: hash\n    restricted: null\n", ""),
+    );
+    const lines = prerequisites(files);
+    expect(lines.filter((line) => line.includes("CREATE FUNCTION ON"))).toEqual([]);
+    expect(lines).toContain(`GRANT USE SCHEMA ON SCHEMA \`dev_sales\`.\`governance\` TO ${runAs};`);
+  });
+
+  it("asks nothing of governance.functions when no function is in it", () => {
+    const files = maskedWith("standard.yaml", (text) =>
+      text
+        .replace("    confidential: hash\n    restricted: null\n", "")
+        .replace("    internal: mask_internal\n", "")
+        .replace("function: region_filter", "function: security.filters.region_filter"),
+    );
+    expect(prerequisites(files).join("\n")).not.toContain("`governance`");
   });
 
   it("says why MANAGE on the schemas waits for the first deployment", () => {
@@ -98,7 +126,23 @@ describe("the request with masks and row filters", () => {
       "Function `security.masks.mask_secret`, which a mask or row filter uses; the run_as identity needs EXECUTE on it.",
       "Serverless compute, or Databricks Runtime 16.4 or later, for everyone who reads the masked or filtered tables: older runtimes cannot read a table with a policy.",
       "Governed tag `sensitivity`, with the values `public`, `internal`, `confidential`, `restricted` and `secret`, which an account administrator creates; the run_as identity needs ASSIGN on it.",
+      "Governed tag `region`, which a row filter matches; an account administrator creates it, and the run_as identity needs ASSIGN on it.",
     ]);
+  });
+
+  it("names the values of a filter's tag key, where the definitions give them", () => {
+    const files = {
+      ...maskedWith("standard.yaml", (text) =>
+        text.replace("match: { tag: region }", "match: { tag: region, value: emea }"),
+      ),
+      "contracts/customers.yaml": masked["contracts/customers.yaml"]!.replace(
+        "tags: [region]",
+        'tags: ["region:emea"]',
+      ),
+    };
+    expect(must(files)).toContain(
+      "Governed tag `region`, with the values `emea`, which a row filter matches; an account administrator creates it, and the run_as identity needs ASSIGN on it.",
+    );
   });
 
   it("asks for no functions schema when no built-in mask is applied", () => {

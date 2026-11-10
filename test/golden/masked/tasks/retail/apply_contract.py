@@ -12,8 +12,12 @@ from pyspark.sql import SparkSession
 
 STATEMENTS = json.loads(r"""[
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders_changes` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers` ALTER COLUMN `email` SET TAGS ('pii' = '', 'sensitivity' = 'confidential')",
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers` ALTER COLUMN `country` SET TAGS ('region' = '', 'sensitivity' = 'internal')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine` ALTER COLUMN `email` SET TAGS ('pii' = '', 'sensitivity' = 'confidential')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine` ALTER COLUMN `country` SET TAGS ('region' = '', 'sensitivity' = 'internal')",
   "ALTER MATERIALIZED VIEW `${ingestron.catalog}`.`silver`.`daily_sales` ALTER COLUMN `total` SET TAGS ('sensitivity' = 'secret')",
   "ALTER MATERIALIZED VIEW `${ingestron.catalog}`.`gold`.`top_customers` ALTER COLUMN `total` SET TAGS ('sensitivity' = 'secret')"
 ]""")
@@ -189,7 +193,19 @@ GOVERNANCE = json.loads(r"""{
       "policies": []
     },
     {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_changes`",
+      "policies": []
+    },
+    {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine`",
+      "policies": []
+    },
+    {
       "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers`",
+      "policies": []
+    },
+    {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine`",
       "policies": []
     },
     {

@@ -3,6 +3,7 @@ export { capabilities, prerequisites, tagProblems } from "./capabilities.js";
 export { gatewayConnectors, lakeflowConnect } from "./connect-method.js";
 export { connectors } from "./connectors.js";
 export { contract } from "./contract.js";
+export { maskNameProblems } from "./governance-needs.js";
 export { files, materialisedView, sql, streamingTable } from "./methods.js";
 export { intent } from "./intent.js";
 export { pyspark } from "./pyspark-method.js";

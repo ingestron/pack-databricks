@@ -12,8 +12,12 @@ from pyspark.sql import SparkSession
 
 STATEMENTS = json.loads(r"""[
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders_changes` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine` ALTER COLUMN `card_last4` SET TAGS ('sensitivity' = 'restricted')",
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers` ALTER COLUMN `email` SET TAGS ('pii' = '', 'sensitivity' = 'confidential')",
   "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers` ALTER COLUMN `country` SET TAGS ('region' = '', 'sensitivity' = 'internal')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine` ALTER COLUMN `email` SET TAGS ('pii' = '', 'sensitivity' = 'confidential')",
+  "ALTER STREAMING TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine` ALTER COLUMN `country` SET TAGS ('region' = '', 'sensitivity' = 'internal')",
   "ALTER MATERIALIZED VIEW `${ingestron.catalog}`.`silver`.`daily_sales` ALTER COLUMN `total` SET TAGS ('sensitivity' = 'secret')",
   "ALTER MATERIALIZED VIEW `${ingestron.catalog}`.`gold`.`top_customers` ALTER COLUMN `total` SET TAGS ('sensitivity' = 'secret')"
 ]""")
@@ -126,6 +130,34 @@ GOVERNANCE = json.loads(r"""{
       "match": "has_tag_value('sensitivity', 'restricted')"
     },
     {
+      "name": "ingestron_mask_restricted",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_changes`",
+      "kind": "COLUMN MASK",
+      "function": "${ingestron.governance_functions}.ingestron_mask_null",
+      "match": "has_tag_value('sensitivity', 'restricted')"
+    },
+    {
+      "name": "ingestron_filter_restricted_rows",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_changes`",
+      "kind": "ROW FILTER",
+      "function": "security.filters.restricted_rows",
+      "match": "has_tag_value('sensitivity', 'restricted')"
+    },
+    {
+      "name": "ingestron_mask_restricted",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine`",
+      "kind": "COLUMN MASK",
+      "function": "${ingestron.governance_functions}.ingestron_mask_null",
+      "match": "has_tag_value('sensitivity', 'restricted')"
+    },
+    {
+      "name": "ingestron_filter_restricted_rows",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine`",
+      "kind": "ROW FILTER",
+      "function": "security.filters.restricted_rows",
+      "match": "has_tag_value('sensitivity', 'restricted')"
+    },
+    {
       "name": "ingestron_mask_confidential",
       "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers`",
       "kind": "COLUMN MASK",
@@ -142,6 +174,27 @@ GOVERNANCE = json.loads(r"""{
     {
       "name": "ingestron_filter_region_rows",
       "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers`",
+      "kind": "ROW FILTER",
+      "function": "${ingestron.governance_functions}.region_filter",
+      "match": "has_tag('region')"
+    },
+    {
+      "name": "ingestron_mask_confidential",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine`",
+      "kind": "COLUMN MASK",
+      "function": "${ingestron.governance_functions}.ingestron_mask_hash",
+      "match": "has_tag_value('sensitivity', 'confidential')"
+    },
+    {
+      "name": "ingestron_mask_internal",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine`",
+      "kind": "COLUMN MASK",
+      "function": "${ingestron.governance_functions}.mask_internal",
+      "match": "has_tag_value('sensitivity', 'internal')"
+    },
+    {
+      "name": "ingestron_filter_region_rows",
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine`",
       "kind": "ROW FILTER",
       "function": "${ingestron.governance_functions}.region_filter",
       "match": "has_tag('region')"
@@ -170,7 +223,29 @@ GOVERNANCE = json.loads(r"""{
       ]
     },
     {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_changes`",
+      "policies": [
+        "ingestron_mask_restricted",
+        "ingestron_filter_restricted_rows"
+      ]
+    },
+    {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`orders_quarantine`",
+      "policies": [
+        "ingestron_mask_restricted",
+        "ingestron_filter_restricted_rows"
+      ]
+    },
+    {
       "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers`",
+      "policies": [
+        "ingestron_mask_confidential",
+        "ingestron_mask_internal",
+        "ingestron_filter_region_rows"
+      ]
+    },
+    {
+      "on": "TABLE `${ingestron.catalog}`.`bronze`.`customers_quarantine`",
       "policies": [
         "ingestron_mask_confidential",
         "ingestron_mask_internal",

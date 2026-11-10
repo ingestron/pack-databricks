@@ -28,3 +28,10 @@ APPLY AS DELETE WHEN op = 'D'
 SEQUENCE BY `updated_at`
 COLUMNS * EXCEPT (`op`)
 STORED AS SCD TYPE 1;
+
+-- Rows that a check with the action drop removed from orders, with the checks they failed.
+CREATE OR REFRESH STREAMING TABLE `bronze`.`orders_quarantine`
+COMMENT 'Rows of orders that failed a check that drops rows; _failed_checks names the checks.'
+AS SELECT *, filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`customer_id` IS NOT NULL, NULL, 'customer_id_not_null'), IF(`ordered_at` IS NOT NULL, NULL, 'ordered_at_not_null'), IF(`updated_at` IS NOT NULL, NULL, 'updated_at_not_null')), name -> name IS NOT NULL) AS _failed_checks
+FROM STREAM(`bronze`.`orders_changes`)
+WHERE NOT coalesce((`id` IS NOT NULL) AND (`customer_id` IS NOT NULL) AND (`ordered_at` IS NOT NULL) AND (`updated_at` IS NOT NULL), FALSE);

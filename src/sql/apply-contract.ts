@@ -7,6 +7,7 @@ import {
   type ResolvedTable,
   type TableCheck,
 } from "@ingestron/definitions";
+import { companionsOf, kindOf } from "./companions.js";
 import { quoteName } from "./query.js";
 import { sqlString } from "./sql-data.js";
 
@@ -20,9 +21,13 @@ export interface CheckRun extends Omit<TableCheck, "arguments" | "query" | "metr
 /** The statements and checks to run after the refresh; both empty when nothing is on. */
 export function applyContract(model: ResolvedModel): { statements: string[]; checks: CheckRun[] } {
   const { manage } = model.platform;
+  // With masks or filters, the tables the pack creates beside a table are tagged as it is,
+  // so the policies that match the tags cover their copies of its columns too.
+  const policies = manage.masks === true || manage.filters === true;
   return {
     statements: model.tables.flatMap((table) => [
       ...(manage.tags ? tagStatements(table, classificationTag(model)) : []),
+      ...(manage.tags && policies ? companionTags(table, classificationTag(model)) : []),
       ...(manage.comments ? commentStatements(table) : []),
     ]),
     checks: manage.checks ? model.tables.flatMap(checkRuns) : [],
@@ -35,14 +40,10 @@ export function tagParts(tag: string): [string, string] {
   return at < 0 ? [tag, ""] : [tag.slice(0, at), tag.slice(at + 1)];
 }
 
-/** `STREAMING TABLE` or `MATERIALIZED VIEW`, as `ALTER` names the table. */
-function kindOf(table: ResolvedTable): string {
-  const view = table.store?.method === "materialised-view" || table.transform?.method === "pyspark";
-  return view ? "MATERIALIZED VIEW" : "STREAMING TABLE";
-}
+const fullText = ({ catalog, schema, table }: ResolvedTable["fullName"]) =>
+  quoteName(`${catalog}.${schema}.${table}`);
 
-const nameOf = (table: ResolvedTable) =>
-  quoteName(`${table.fullName.catalog}.${table.fullName.schema}.${table.fullName.table}`);
+const nameOf = (table: ResolvedTable) => fullText(table.fullName);
 
 const tagList = (tags: string[]) =>
   tags
@@ -58,7 +59,19 @@ function tagStatements(table: ResolvedTable, key: string): string[] {
   const alter = `ALTER ${kindOf(table)} ${nameOf(table)}`;
   const own =
     table.contract.tags.length > 0 ? [`${alter} SET TAGS (${tagList(table.contract.tags)})`] : [];
-  const columns = table.contract.columns.flatMap((column) => {
+  return [...own, ...columnTags(table, key, alter)];
+}
+
+/** The column tags of each table the pack creates beside the table, which has its columns. */
+function companionTags(table: ResolvedTable, key: string): string[] {
+  return companionsOf(table).flatMap(({ kind, fullName }) =>
+    columnTags(table, key, `ALTER ${kind} ${fullText(fullName)}`),
+  );
+}
+
+/** The `ALTER … ALTER COLUMN … SET TAGS` of each of the contract's tagged columns. */
+function columnTags(table: ResolvedTable, key: string, alter: string): string[] {
+  return table.contract.columns.flatMap((column) => {
     const classified = column.classification !== undefined && column.classification !== "";
     const tags = [
       ...(column.tags ?? []).filter((tag) => !classified || tagParts(tag)[0] !== key),
@@ -68,7 +81,6 @@ function tagStatements(table: ResolvedTable, key: string): string[] {
       ? [`${alter} ALTER COLUMN ${quoteName(column.name)} SET TAGS (${tagList(tags)})`]
       : [];
   });
-  return [...own, ...columns];
 }
 
 function commentStatements(table: ResolvedTable): string[] {

@@ -22,8 +22,14 @@ const missing = python.error || python.status !== 0;
 
 /** Calls a function of the task with JSON arguments, and returns its JSON result. */
 function call(name: string, ...args: unknown[]): unknown {
+  return callWith("", name, ...args);
+}
+
+/** Calls a function, with more Python defined beside the task's functions. */
+function callWith(more: string, name: string, ...args: unknown[]): unknown {
   const script = [
     functions,
+    more,
     "import json, sys",
     `print(json.dumps(${name}(*json.load(sys.stdin))))`,
   ].join("\n");
@@ -68,6 +74,39 @@ describe("the after-refresh task's policy functions", () => {
         const statement = call("policy_statement", policy, exempt) as string;
         expect(statement, policy.name).toContain(` TO \`account users\` EXCEPT \`${runner}\` `);
       }
+    }
+  });
+
+  it("makes every golden policy with the identity it runs as in EXCEPT, end to end", () => {
+    for (const name of ["masked", "masked-tables"]) {
+      const governance = { ...governanceOf(golden(name))!, unmasked: [] };
+      const stub = [
+        "class Result:",
+        "    def __init__(self, rows):",
+        "        self.rows = rows",
+        "    def first(self):",
+        "        return self.rows[0]",
+        "    def collect(self):",
+        "        return []",
+        "class Spark:",
+        "    def __init__(self):",
+        "        self.statements = []",
+        "    def sql(self, statement):",
+        "        self.statements.append(statement)",
+        `        return Result([["${runner}"]])`,
+        "def made(governance):",
+        "    global GOVERNANCE",
+        "    GOVERNANCE = governance",
+        "    spark = Spark()",
+        "    apply_policies(spark)",
+        "    return spark.statements",
+      ].join("\n");
+      const statements = callWith(stub, "made", governance) as string[];
+      const created = statements.filter((statement) => statement.startsWith("CREATE"));
+      expect(created.length, name).toBe(governance.policies.length);
+      for (const statement of created)
+        expect(statement, name).toContain(` TO \`account users\` EXCEPT \`${runner}\` FOR TABLES `);
+      expect(statements[0], name).toBe("SELECT session_user()");
     }
   });
 

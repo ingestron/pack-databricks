@@ -7,6 +7,7 @@ naming:
   catalog: "{{ environment }}_sales"
 layers:
   - name: bronze
+    does: [check, quarantine]
     access:
       roles: [{ role: data-engineers, access: write }]
   - name: silver
@@ -16,6 +17,7 @@ layers:
   - gold
 quality:
   required: drop
+  quarantine: true
 store:
   settings:
     streaming-table:
