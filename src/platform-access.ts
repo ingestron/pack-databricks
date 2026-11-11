@@ -47,7 +47,13 @@ export const governance: JsonSchema = {
     },
     unmasked: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        type: "string",
+        description:
+          "A principal that sees real values in masked columns besides run_as: a group, user or service principal.",
+        find: "Settings, then Identity and access, then Manage next to Groups: the name of the group that looks after the data.",
+        suggest: "<group>",
+      },
       description:
         "Principals, as the platform names them, that see real values in masked columns besides run_as. Exact grants never revoke their privileges.",
       find: "Settings, then Identity and access, then Manage next to Groups: the name of the group that looks after the data.",
