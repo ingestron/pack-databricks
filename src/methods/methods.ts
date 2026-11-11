@@ -188,7 +188,9 @@ function checkChangeData(table: ResolvedTable): string[] {
   if (settings.mode === "append") return [];
   const problems: string[] = [];
   if (table.contract.primaryKey.length === 0)
-    problems.push(`mode ${String(settings.mode)} needs primary key columns in the contract`);
+    problems.push(
+      `mode ${String(settings.mode)} needs primary key columns in the contract or the source metadata`,
+    );
   if (typeof settings.sequence_by !== "string")
     problems.push(`mode ${String(settings.mode)} needs "sequence_by"`);
   return problems;

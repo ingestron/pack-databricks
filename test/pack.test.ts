@@ -40,7 +40,7 @@ describe("streaming tables", () => {
     const { result } = generate({ ...withStore("  with: { mode: upsert }"), ...noKey });
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       '"mode" is now written as intent: history: latest.',
-      '"streaming-table" for table "orders": mode upsert needs primary key columns in the contract.',
+      '"streaming-table" for table "orders": mode upsert needs primary key columns in the contract or the source metadata.',
       '"streaming-table" for table "orders": mode upsert needs "sequence_by".',
     ]);
   });
