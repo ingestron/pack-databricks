@@ -67,3 +67,25 @@ describe("platform fields", () => {
     ).toThrow('lists the platform field "manage.nothing"');
   });
 });
+
+describe("the schema for mask functions", () => {
+  /**
+   * The errors resolving a Platform whose databricks.governance.functions is `functions`, but
+   * the pack's own that the project has nothing to generate.
+   */
+  const errors = (functions: string) =>
+    resolveDefinitions(
+      memoryFiles({
+        ...files,
+        "platform.yaml": `apiVersion: ingestron.io/v1\nkind: Platform\nid: lakehouse\ndatabricks:\n  governance:\n    functions: "${functions}"\n`,
+      }),
+      { packs: [databricks], environment: "dev" },
+    ).diagnostics.filter((item) => item.severity === "error" && item.code !== "PACK_CHECK");
+
+  it("takes catalog.schema, written without backticks, which the task quotes itself", () => {
+    expect(errors("main.governance")).toEqual([]);
+    expect(errors("my-cat.gov")).toEqual([]);
+    for (const refused of ["`my-cat`.gov", "main.`gov`", "main.gov.more", "main", "main.go v"])
+      expect(errors(refused).length, refused).toBeGreaterThan(0);
+  });
+});

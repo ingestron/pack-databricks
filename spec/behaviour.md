@@ -691,7 +691,8 @@ each with the schema it had at the top of the Platform, and `warehouse_id`,
 the SQL warehouse that runs the bundle's SQL tasks. `manage` also takes
 `grants` (section 8.6), and `masks` and `filters` (section 8.7). `governance`
 takes `functions`, the `catalog.schema` for mask functions and for the team's
-functions named with one part, and `unmasked`, the principals, as the platform
+functions named with one part, written without backticks: two parts, each with
+no `.`, space or backtick, since the task quotes each part itself. It also takes `unmasked`, the principals, as the platform
 names them, that see real values and whose privileges exact grants never
 revoke. The section allows no other
 field. A project that still writes a moved field at the top gets

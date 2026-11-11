@@ -38,9 +38,9 @@ export const governance: JsonSchema = {
   properties: {
     functions: {
       type: "string",
-      pattern: "^[^.\\s]+\\.[^.\\s]+$",
+      pattern: "^[^.\\s`]+\\.[^.\\s`]+$",
       description:
-        "The schema, as catalog.schema, that holds the mask functions Ingestron creates, and the team's mask and filter functions named with one part.",
+        "The schema, as catalog.schema, that holds the mask functions Ingestron creates, and the team's mask and filter functions named with one part. Write the names without backticks: Ingestron quotes each part.",
       find: "Ask your Unity Catalog administrator for a schema the run_as identity may create functions in; Catalog Explorer lists the schemas.",
       suggest: "<catalog>.<schema>",
       examples: ["main.governance"],
