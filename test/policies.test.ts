@@ -116,23 +116,23 @@ describe("masks and row filters on managed schemas", () => {
     expect(governance?.unmasked).toEqual(["data-stewards"]);
   });
 
-  it("runs the functions before the grants, and the policies after them", () => {
+  it("runs the functions and the policies before the grants", () => {
     const text = built(masked).out[script] ?? "";
     const main = text.slice(text.indexOf("def main():"));
     const order = [
       "for statement in STATEMENTS:",
       "for statement in function_statements(GOVERNANCE[",
-      "apply_access(spark)",
       "apply_policies(spark)",
+      "apply_access(spark)",
       "for check in CHECKS:",
     ].map((line) => main.indexOf(line));
     expect(order.every((at) => at > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
-  it("says in the task's header that it grants and applies policies", () => {
+  it("says in the task's header that it applies policies, then grants", () => {
     expect(built(masked).out[script]).toContain(
-      "# It also grants the tables to the principals of their roles, and with exact\n# grants revokes what they do not give.\n# It also creates the mask functions, masks columns and filters rows with\n# policies, and drops the policies it made that are no longer declared.\n",
+      "# It also creates the mask functions, masks columns and filters rows with\n# policies, and drops the policies it made that are no longer declared.\n# It also grants the tables to the principals of their roles, and with exact\n# grants revokes what they do not give.\n# It grants only once the policies are made, so when one cannot be made,\n# no principal it grants reads unmasked or unfiltered rows.\n",
     );
   });
 });

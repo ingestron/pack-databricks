@@ -1,10 +1,12 @@
 # {{ header }}
 # Runs after each refresh: Lakeflow pipelines cannot set tags or column
 # comments, nor compare counts over all rows, so this task does.
-{% if access != "" %}# It also grants the tables to the principals of their roles, and with exact
-# grants revokes what they do not give.
-{% endif %}{% if governance != "" %}# It also creates the mask functions, masks columns and filters rows with
+{% if governance != "" %}# It also creates the mask functions, masks columns and filters rows with
 # policies, and drops the policies it made that are no longer declared.
+{% endif %}{% if access != "" %}# It also grants the tables to the principals of their roles, and with exact
+# grants revokes what they do not give.
+{% endif %}{% if access != "" and governance != "" %}# It grants only once the policies are made, so when one cannot be made,
+# no principal it grants reads unmasked or unfiltered rows.
 {% endif %}import json
 import sys
 
@@ -71,8 +73,8 @@ def measure(spark, check):
         spark.sql(with_values(statement))
 {% if governance != "" %}    for statement in function_statements(GOVERNANCE["functions"]):
         spark.sql(statement)
+    apply_policies(spark)
 {% endif %}{% if access != "" %}    apply_access(spark)
-{% endif %}{% if governance != "" %}    apply_policies(spark)
 {% endif %}    failures = []
     for check in CHECKS:
         measured = measure(spark, check)

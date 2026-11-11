@@ -26,7 +26,7 @@ with a target per environment, which a tool writes to one folder (the CLI writes
 | `resources/<job>.job.yml`            | The refresh job, when there is a schedule or an after-refresh task                               |
 | `resources/schemas.yml`              | Managed schemas, with `manage.schemas`                                                           |
 | `src/<pipeline>/<layer>/<table>.sql` | A table's SQL (`.py` for a PySpark transform)                                                    |
-| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments, grants, policies and table checks, when any is on |
+| `tasks/<pipeline>/apply_contract.py` | The after-refresh task: tags, column comments, policies, grants and table checks, when any is on |
 | `prerequisites/<environment>.sql`    | Grants an administrator runs once in that environment, when a capability needs it                |
 
 `<pipeline>` and `<job>` are the model's `names.pipeline` and `names.job`;
@@ -884,8 +884,9 @@ task holds `ACCESS`, a list with, for each such table in the model's order,
 `table`, its three-part name quoted as SQL names it; `name`, its three-part
 name as text; `grants`, a list of `{ principal, privileges }`; and `exact`.
 It also holds `KEEP`, the Platform's `databricks.governance.unmasked`. After
-the tags and column comments, and before the table checks, the task runs for
-each table in turn:
+the tags and column comments, and after the mask functions, the policies and
+the drops of stale policies when the task makes them (section 8.7), and before
+the table checks, the task runs for each table in turn:
 
 1. `GRANT <privileges> ON TABLE <table> TO <principal>`, for each grant;
 2. with `exact`, `SHOW GRANTS ON TABLE <table>`, then each statement that
@@ -1119,12 +1120,16 @@ task holds `GOVERNANCE`: `functions`, each `{ name, returns }`; `policies`,
 each `{ name, on, kind, function, match }`; `places`, each `{ on, policies }`
 with the names of the policies made there; `owned`, the name prefixes of the
 switches that are on; and `unmasked`. The task runs, in this order: the tags
-and column comments; the mask functions; the grants and exact revokes
-(section 8.6); the policies; the drops of stale policies; and the table checks.
+and column comments; the mask functions; the policies; the drops of stale
+policies; the grants and exact revokes (section 8.6); and the table checks.
 Tags come before policies, which match them, and functions before the
-policies that use them. The file's header comment says what the task does
-beyond tags, comments and checks: two lines for grants, and two for masks and
-filters, each only when the task does it.
+policies that use them. Policies come before grants, so when a policy cannot
+be made the task fails before it grants anything: no principal it grants
+reads unmasked or unfiltered rows, even on a first run or a new table. The
+file's header comment says what the task does beyond tags, comments and
+checks: two lines for masks and filters, then two for grants, each only when
+the task does it, and, with both, two more that say the grants come after the
+policies.
 
 **`prerequisites/<environment>.sql`**, with `manage.masks` or
 `manage.filters` on, gives the run_as identity once:
