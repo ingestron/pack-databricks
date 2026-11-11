@@ -63,7 +63,7 @@ describe("a table with no contract", () => {
     expect(pipeline).toMatch(/primary_keys:\n\s+- id/);
   });
 
-  it("refuses change data when neither the contract nor the metadata has a key", () => {
+  it("refuses change data when the source metadata has no key", () => {
     const store = "store:\n  with: { mode: upsert, sequence_by: total }\n";
     const flow = flowOf("files", "/orders").replace("tables:", `${store}tables:`);
     const { result } = generate({
@@ -71,7 +71,7 @@ describe("a table with no contract", () => {
       "files.metadata.yaml": metadata("files", "/orders", [totalColumn]),
     });
     expect(result.diagnostics.map((item) => item.message)).toContain(
-      '"streaming-table" for table "orders": mode upsert needs primary key columns in the contract or the source metadata.',
+      '"streaming-table" for table "orders": mode upsert needs primary key columns in the source metadata.',
     );
   });
 });
