@@ -1,0 +1,44 @@
+# How the organisation builds data products, with access from the contracts' roles, masks and row filters.
+apiVersion: ingestron.io/v1
+kind: Standard
+id: acme
+packs: [databricks@2]
+naming:
+  catalog: "{{ environment }}_sales"
+layers:
+  - name: bronze
+    does: [check, quarantine]
+    access:
+      roles: [{ role: data-engineers, access: write }]
+  - name: silver
+    access:
+      contract: false
+      roles: [{ role: finance, access: write }]
+  - gold
+quality:
+  required: drop
+  quarantine: true
+store:
+  settings:
+    streaming-table:
+      properties: { delta.enableChangeDataFeed: "true" }
+  fixed:
+    streaming-table: { cluster_by: auto }
+governance:
+  classification:
+    values: [public, internal, confidential, restricted, secret]
+    tag: sensitivity
+  access:
+    grants: exact
+  masks:
+    confidential: hash
+    restricted: null
+    internal: mask_internal
+    secret: security.masks.mask_secret
+  filters:
+    region_rows:
+      function: region_filter
+      match: { tag: region }
+    restricted_rows:
+      function: security.filters.restricted_rows
+      match: { classification: restricted }

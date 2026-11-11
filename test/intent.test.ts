@@ -1,0 +1,202 @@
+// What the pack declares about intent: coverage, aliases and defaults.
+import { memoryFiles } from "@ingestron/config";
+import {
+  intentCoverageGaps,
+  intentUseOf,
+  resolveDefinitions,
+  type Method,
+} from "@ingestron/definitions";
+import { describe, expect, it } from "vitest";
+import { databricks } from "../src/index.js";
+import { join } from "node:path";
+import { fold, folderFiles, resolveAll, retail } from "./fold-helpers.js";
+import { base } from "./pack-helpers.js";
+
+const golden = folderFiles(join(import.meta.dirname, "golden/retail"));
+
+function resolve(files: Record<string, string>, environment = "dev") {
+  return resolveDefinitions(memoryFiles(files), { packs: [databricks], environment });
+}
+
+describe("coverage", () => {
+  it("covers every intent path and value", () => {
+    expect(intentCoverageGaps(databricks)).toEqual([]);
+  });
+
+  it("uses what the pack generates, with a status from the research", () => {
+    for (const key of ["history=none", "history=latest", "history=full", "load.mode=files"]) {
+      const use = intentUseOf(databricks, key.split("=")[0]!, key.split("=")[1]);
+      expect(use?.use, key).toBe("used");
+      if (use?.use === "used") expect(use.status?.level, key).toBe("ga");
+    }
+    expect(intentUseOf(databricks, "history", "bitemporal")).toEqual({
+      use: "not-yet",
+      reason: "Planned.",
+    });
+    expect(intentUseOf(databricks, "operations.trigger", "upstream")?.use).toBe("not-yet");
+    expect(intentUseOf(databricks, "operations.retries")?.use).toBe("used");
+  });
+
+  it("leaves landed files and ingest-step audit columns to the landing pack", () => {
+    expect(intentUseOf(databricks, "retention.landed_files")?.use).toBe("elsewhere");
+    expect(intentUseOf(databricks, "audit", "run_id")?.use).toBe("elsewhere");
+    expect(intentUseOf(databricks, "audit", "loaded_at")?.use).toBe("used");
+  });
+
+  it("differs by method where a method cannot do what the pack does", () => {
+    const view = databricks.methods["materialised-view"] as Method;
+    expect(intentUseOf(view, "history", "full")?.use).toBe("not-applicable");
+    expect(intentUseOf(view, "history", "none")?.use).toBe("used");
+    const connect = databricks.methods["lakeflow-connect"] as Method;
+    expect(intentUseOf(connect, "load.mode", "files")?.use).toBe("not-applicable");
+    expect(intentUseOf(connect, "history", "full")?.use).toBe("used");
+  });
+
+  it("grants, masks and filters rows with policies on every method that keeps a table", () => {
+    const view = databricks.methods["materialised-view"] as Method;
+    for (const [path, value] of [
+      ["access.grants", "read"],
+      ["access.grants", "write"],
+      ["access.exact", "true"],
+      ...["null", "hash", "redact", "function"].map((mask) => ["access.masks", mask] as const),
+      ["access.filters", "true"],
+    ] as const) {
+      const use = intentUseOf(databricks, path, value);
+      expect(use?.use, `${path}=${value}`).toBe("used");
+      if (use?.use === "used")
+        expect(use.status).toMatchObject({ level: "ga", checked: "2026-11-11" });
+      for (const method of ["streaming-table", "lakeflow-connect"])
+        expect(
+          intentUseOf(databricks.methods[method] as Method, path, value),
+          method,
+        ).toBeUndefined();
+      if (`${path}=${value}` !== "access.grants=write")
+        expect(intentUseOf(view, path, value), `view ${path}=${value}`).toBeUndefined();
+    }
+    expect(intentUseOf(view, "access.grants", "write")?.use).toBe("not-applicable");
+  });
+
+  it("marks the run duration warning as a Public Preview feature", () => {
+    expect(intentUseOf(databricks, "operations.alerts", "slow")).toEqual({
+      use: "used",
+      does: "A run duration health rule and warning alert.",
+      status: {
+        level: "preview",
+        label: "Public Preview",
+        checked: "2026-11-09",
+        source: "https://docs.databricks.com/aws/en/jobs/configure-job",
+      },
+    });
+    expect(intentUseOf(databricks, "operations.alerts", "failure")?.use).toBe("used");
+  });
+
+  it("gives Lakeflow Connect no rescued, audit or clustering columns of its own", () => {
+    const connect = databricks.methods["lakeflow-connect"] as Method;
+    expect(intentUseOf(connect, "rescued")).toEqual({
+      use: "not-applicable",
+      reason: "Managed ingestion has no rescued data column.",
+    });
+    expect(intentUseOf(connect, "storage.clustering", "auto")).toEqual({
+      use: "not-yet",
+      reason: "Planned.",
+    });
+    for (const value of ["loaded_at", "source_file", "source_modified_at"])
+      expect(intentUseOf(connect, "audit", value), value).toEqual({
+        use: "not-applicable",
+        reason: "Managed ingestion writes the table; it adds no metadata columns.",
+      });
+  });
+});
+
+describe("aliases and defaults", () => {
+  const clustering = {
+    values: {
+      auto: { storage: { clustering: "auto" } },
+      none: { storage: { clustering: "none" } },
+    },
+  };
+
+  it("declares the aliases and intent defaults", () => {
+    const streaming = databricks.methods["streaming-table"] as Method;
+    expect(streaming.aliases).toEqual({
+      mode: {
+        values: {
+          append: { history: "none" },
+          upsert: { history: "latest" },
+          history: { history: "full" },
+        },
+      },
+      sequence_by: { path: "sequence" },
+      delete_when: { path: "load.deletes.when" },
+      cluster_by: clustering,
+    });
+    expect((databricks.methods["materialised-view"] as Method).aliases).toEqual({
+      cluster_by: clustering,
+    });
+    expect(streaming.intentDefaults).toEqual({ history: "none" });
+    expect((databricks.methods["lakeflow-connect"] as Method).intentDefaults).toEqual({
+      history: "latest",
+    });
+    expect((databricks.methods.files as Method).intentDefaults).toEqual({
+      load: { mode: "files" },
+    });
+    expect((databricks.methods["lakeflow-connect"] as Method).aliases).toEqual(
+      streaming.aliases?.mode ? { mode: streaming.aliases.mode } : {},
+    );
+  });
+
+  it("gives the same orders table from history: latest as from mode: upsert", () => {
+    const changed = {
+      ...retail,
+      "flows/shop.yaml": retail["flows/shop.yaml"]!.replace(
+        "store:\n      with: { mode: upsert, sequence_by",
+        "history: latest\n    store:\n      with: { sequence_by",
+      ),
+    };
+    expect(changed["flows/shop.yaml"]).toContain("history: latest");
+    const files = fold(resolveAll(changed, ["dev", "prod"])).files;
+    expect(files["src/retail/bronze/orders.sql"]).toBe(golden["src/retail/bronze/orders.sql"]);
+    expect(files["src/retail/bronze/orders.sql"]).toContain("STORED AS SCD TYPE 1");
+    expect(files).toEqual(golden);
+  });
+
+  it("reports a method that cannot keep the history asked for", () => {
+    const changed = {
+      ...retail,
+      "flows/shop.yaml": retail["flows/shop.yaml"]!.replace(
+        / {4}store:\n {6}with:.*\n/,
+        "    history: full\n",
+      ).replace("source: shop\n", "source: shop\nstore: { uses: materialised-view }\n"),
+    };
+    const applied = resolve(changed).diagnostics.filter((item) => item.code === "NOT_APPLIED");
+    expect(applied.map((item) => item.message)).toEqual([
+      expect.stringContaining("A materialised view is recomputed on each update"),
+    ]);
+  });
+
+  it("clusters by nothing when the standard's storage says none", () => {
+    const standard = `${base["standard.yaml"]}storage: { clustering: none }\n`;
+    const { model, diagnostics } = resolve({ ...base, "standard.yaml": standard });
+    expect(diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+    const sql = databricks.build(model!)["src/shop/bronze/orders.sql"]!;
+    expect(sql).toContain("CREATE OR REFRESH STREAMING TABLE");
+    expect(sql).not.toContain("CLUSTER BY");
+  });
+
+  it("clusters a materialised view by nothing when the standard's storage says none", () => {
+    const standard = `${base["standard.yaml"]}storage: { clustering: none }\n`;
+    const flow = base["flow.yaml"]!.replace(
+      "source: files\n",
+      "source: files\nstore: { uses: materialised-view }\n",
+    );
+    const { model } = resolve({ ...base, "standard.yaml": standard, "flow.yaml": flow });
+    const sql = databricks.build(model!)["src/shop/bronze/orders.sql"]!;
+    expect(sql).toContain("CREATE OR REFRESH MATERIALIZED VIEW");
+    expect(sql).not.toContain("CLUSTER BY");
+  });
+
+  it("still clusters by auto without storage intent", () => {
+    const { model } = resolve(base);
+    expect(databricks.build(model!)["src/shop/bronze/orders.sql"]).toContain("CLUSTER BY AUTO");
+  });
+});

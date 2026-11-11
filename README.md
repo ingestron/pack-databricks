@@ -16,12 +16,19 @@ What it uses on Databricks:
   evolution mode.
 - **Change data with AUTO CDC:** `mode: upsert` (SCD type 1) or
   `mode: history` (SCD type 2), keyed by the contract's primary key.
-- **Expectations:** from required columns and your own checks, with
-  `warn`, `drop` or `fail` per check.
+- **Expectations:** from required columns, the contract's rules and your own
+  checks, with `warn`, `drop` or `fail` per check, and a quarantine table for
+  the rows a check drops.
+- **Cleansing:** trimming, empty text to null, mapped values, case, defaults
+  and time zone conversion in the table's `SELECT`, and one row per key in a
+  materialised view.
 - **Liquid clustering:** `CLUSTER BY AUTO` by default, or named columns.
 - **Materialised views** for transforms, in SQL or PySpark.
 - **Serverless pipelines**, a scheduled refresh job, Unity Catalog schemas
   and grants when you ask for them, permissions, tags and notifications.
+- **Access**, when you turn it on: grants from the contracts' roles, and
+  column masks and row filters as Unity Catalog policies, which always let
+  `run_as` read real values.
 
 One bundle covers every environment, with a target per environment, as
 Databricks teams lay out bundles by hand. A value is a bundle variable only
@@ -114,9 +121,56 @@ case). A workspace host supplied this way is `DATABRICKS_HOST`.
 in that environment. It is not deployed, and neither are `.generated.json` and
 `.generated.lock`, which `ingestron` keeps in the folder.
 
-The after-refresh task (tags, column comments and table checks) is
+The after-refresh task (tags, column comments, policies, grants and table
+checks) is
 `tasks/<pipeline>/apply_contract.py`, outside the pipeline's `src/<pipeline>/`
 sources, so that only the refresh job runs it.
+
+## What changed in 2.3
+
+The pack reads the standard's intent: what a table keeps and how its data is
+loaded, such as `history: latest`, written once for every engine. A project
+that declares no intent gets the same files as with 2.2.
+
+- Settings that are now other names for intent still work and build the same
+  files, but each is a `SETTING_MOVED` warning with the fix `Write as intent`:
+  - `mode` of `streaming-table` and `lakeflow-connect`: `append` is
+    `history: none`, `upsert` is `history: latest`, `history` is
+    `history: full`;
+  - `sequence_by` of `streaming-table` is `sequence`, and `delete_when` is
+    `load.deletes.when`;
+  - `cluster_by: auto` and `cluster_by: none` of `streaming-table` and
+    `materialised-view` are `storage.clustering: auto` and `none`. A list of
+    columns stays a setting.
+- The Platform has a `databricks` section. `mode`, `workspace`, `run_as`,
+  `compute`, `permissions`, `manage` and `grants` written at the top of the
+  Platform still work, and each is a `PLATFORM_FIELD_MOVED` warning with the
+  fix `Move to databricks.<field>`. `notifications.on_failure` is the same
+  warning, with the fix `Move to alerts`, which writes
+  `alerts: [{ kind: email, to: [...], on: [failure] }]`. The section also takes
+  `warehouse_id`.
+- New output appears only where the project declares it:
+  - the standard's `operations`: retries on each pipeline task, the job's
+    timeout, and its concurrency and queueing;
+  - the Platform's `alerts`: email and webhook alerts on failure, and, with the
+    standard's `operations.alerts.slow_after`, a run duration rule (Public
+    Preview);
+  - `quality.results`: each pipeline's event log, published to a table, when
+    the standard or any of the pipeline's tables keeps results;
+  - `audit` and `rescued`: load time, file path and modification time columns,
+    and `_rescued_data`, in streaming tables that read files;
+  - `cleanse`: each column's operations in the table's `SELECT`, and
+    `deduplicate` as `QUALIFY row_number() … = 1` in a materialised view;
+  - `quality.quarantine`: a `<table>_quarantine` table of the rows a `drop`
+    check removes, with the failed checks' names in `_failed_checks`;
+  - `databricks.manage.grants`, `masks` and `filters`: grants from the
+    contracts' roles and layers, and column mask and row filter policies, made
+    by the after-refresh task.
+- Lakeflow Connect writes the table as the source gives it. Checks, cleansing
+  and deduplicate on such a table are `NOT_APPLIED` warnings that say to do
+  them in a transform in the next layer. An expectation written on the flow
+  table is no longer an error.
+- Needs `@ingestron/definitions` 1.13 or later.
 
 ## What changed in 2.0
 

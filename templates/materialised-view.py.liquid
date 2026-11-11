@@ -1,8 +1,36 @@
 # {{ header }}
 from pyspark import pipelines as dp
+{%- if rows != "" %}
+from pyspark.sql.functions import expr as ingestron_expr
+{%- endif %}
 
 # The transform's own code, unchanged:
 {{ code }}
+{%- if rows != "" %}
+
+
+def {{ rows.function }}():
+    """The transform's rows, cleansed and deduplicated, before the checks."""
+    rows = {{ function }}({
+{%- for input in inputs %}
+        {{ input.name }}: spark.read.table({{ input.table }}),
+{%- endfor %}
+    })
+{%- if rows.columns.size > 0 %}
+    rows = rows.withColumns({
+{%- for column in rows.columns %}
+        {{ column.name }}: ingestron_expr({{ column.expression }}),
+{%- endfor %}
+    })
+{%- endif %}
+{%- if rows.window != "" %}
+    rows = rows.withColumn(
+        "_ingestron_row",
+        ingestron_expr({{ rows.window }}),
+    ).filter("_ingestron_row = 1").drop("_ingestron_row")
+{%- endif %}
+    return rows
+{%- endif %}
 
 
 @dp.materialized_view(
@@ -21,8 +49,25 @@ from pyspark import pipelines as dp
 @dp.{{ group.decorator }}({{ group.checks }})
 {%- endfor %}
 def {{ wrapper }}():
+{%- if rows != "" %}
+    return {{ rows.function }}()
+{%- else %}
     return {{ function }}({
 {%- for input in inputs %}
         {{ input.name }}: spark.read.table({{ input.table }}),
 {%- endfor %}
     })
+{%- endif %}
+{%- if quarantine != "" %}
+
+
+@dp.materialized_view(
+    name={{ quarantine.name }},
+    comment={{ quarantine.comment }},
+)
+def {{ quarantine.function }}():
+    return {{ rows.function }}().withColumn(
+        {{ quarantine.column }},
+        ingestron_expr({{ quarantine.failed }}),
+    ).filter({{ quarantine.keep }})
+{%- endif %}

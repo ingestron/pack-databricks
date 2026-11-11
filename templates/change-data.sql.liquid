@@ -18,3 +18,7 @@ SEQUENCE BY {{ cdc.sequence }}
 COLUMNS * EXCEPT ({{ cdc.except_columns }})
 {%- endif %}
 STORED AS SCD TYPE {{ cdc.scd }};
+{%- if quarantine != "" %}
+
+{% render "quarantine", quarantine: quarantine %};
+{%- endif %}

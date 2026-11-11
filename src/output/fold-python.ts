@@ -3,14 +3,14 @@
 // are evaluated when the file is loaded, so each value they need is read once
 // into a module-level constant and put in an f-string, as Databricks' "Create
 // tables in a for loop" example builds `name=`. Reads for the transform's
-// inputs stay inside the function body.
+// inputs stay inside the bodies of the functions the pack writes.
 
 /** A double-quoted Python text on one line, as the pack writes them with JSON. */
 const quoted = /"(?:[^"\\\n]|\\.)*"/g;
 /** A marker, with the variable's name. */
 const marker = /⟦([^⟦⟧]+)⟧/;
-/** The function that defines the table: everything before it runs when the file loads. */
-const wrapper = /^def ingestron_/m;
+/** A function the pack writes: its body runs when the pipeline reads the table. */
+const wrapper = /^def ingestron_/;
 /** The comment above the module-level constants. */
 const header = "# Values that differ between environments, from the pipeline's configuration.";
 
@@ -26,22 +26,26 @@ function constantOf(name: string): string {
 
 /**
  * The file with each marker inside a double-quoted text read from the configuration:
- * before the table's function, `"⟦schema_silver⟧.totals"` becomes
+ * outside the bodies of the functions the pack writes, `"⟦schema_silver⟧.totals"` becomes
  * `f"{ingestron_schema_silver}.totals"` with
  * `ingestron_schema_silver = spark.conf.get("ingestron.schema_silver")` above the
- * decorators; inside it, `spark.conf.get("ingestron.schema_bronze") + ".orders"`.
+ * decorators; inside a body, `spark.conf.get("ingestron.schema_bronze") + ".orders"`.
  * Undefined when a marker is anywhere else, which no Python expression can stand for.
  */
 export function pythonValues(text: string): string | undefined {
-  const at = Math.max(text.search(wrapper), 0);
   const names: string[] = [];
-  const loaded = text
-    .slice(0, at)
-    .replace(quoted, (found) => (marker.test(found) ? formatted(found, names) : found));
-  const body = text
-    .slice(at)
-    .replace(quoted, (found) => (marker.test(found) ? joined(found) : found));
-  const folded = `${loaded}${body}`;
+  let inBody = false;
+  const folded = text
+    .split("\n")
+    .map((line) => {
+      if (wrapper.test(line)) inBody = true;
+      else if (/^\S/.test(line)) inBody = false;
+      const inside = inBody && !wrapper.test(line);
+      return line.replace(quoted, (found) =>
+        !marker.test(found) ? found : inside ? joined(found) : formatted(found, names),
+      );
+    })
+    .join("\n");
   if (marker.test(folded)) return undefined;
   if (names.length === 0) return folded;
   const reads = [...new Set(names)].map(

@@ -1,0 +1,26 @@
+# The lakehouse-streaming kit's standard: files into bronze with audit columns
+# and rescued data, the event log published, retries, queueing and alerts.
+apiVersion: ingestron.io/v1
+kind: Standard
+id: lakehouse-streaming
+packs: [databricks@2]
+layers:
+  - { name: bronze, audit: [loaded_at, source_file, source_modified_at], rescued: true }
+  - silver
+  - gold
+naming:
+  catalog: "{{ environment }}_sales"
+storage:
+  clustering: auto
+quality:
+  required: drop
+  results: true
+operations:
+  retries: { count: 2, interval: 5m }
+  timeout: 2h
+  concurrency: { max_runs: 1, queue: true }
+  alerts: { on: [failure, slow], slow_after: 1h }
+store:
+  settings:
+    streaming-table:
+      properties: { delta.enableChangeDataFeed: "true" }

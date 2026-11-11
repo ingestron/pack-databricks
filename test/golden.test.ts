@@ -1,9 +1,38 @@
-// The retail-shaped project folded for dev and prod, and for dev, test and prod,
-// against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
+// The retail-shaped project folded for dev and prod, and for dev, test and prod, and
+// under a kit's standard, a project that cleanses and quarantines, and projects with grants,
+// masks and row filters, against the files in test/golden. UPDATE_GOLDEN=1 writes them again.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fold, foldFailures, folderFiles, resolveAll, retail, shop } from "./fold-helpers.js";
+
+/** The retail project under the lakehouse-streaming kit's standard, with alerts. */
+const standards = folderFiles(join(import.meta.dirname, "fixtures/standards"));
+
+/** A CRM project: bronze as it comes, silver cleansed, deduplicated, checked and quarantined. */
+const quality = folderFiles(join(import.meta.dirname, "fixtures/quality"));
+
+/**
+ * A project with access: exact grants, a role whose principal differs by environment, a
+ * principal with a backtick, write roles, layer access and a custom classification tag key.
+ */
+const governed = folderFiles(join(import.meta.dirname, "fixtures/governed"));
+
+/** The governed project with masks and row filters on managed schemas. */
+const masked = folderFiles(join(import.meta.dirname, "fixtures/masked"));
+
+/** The masked project without managed schemas, so its policies are on its tables. */
+const maskedTables = {
+  ...masked,
+  "platform.yaml": masked["platform.yaml"]!.replace("schemas: true, ", ""),
+};
+
+/** The same project with additive grants and without managed schemas. */
+const grants = {
+  ...governed,
+  "standard.yaml": governed["standard.yaml"]!.replace("grants: exact", "grants: additive"),
+  "platform.yaml": governed["platform.yaml"]!.replace("schemas: true, ", ""),
+};
 
 const threeEnvironments = [
   "id: retail",
@@ -57,6 +86,12 @@ const cases = {
     environments: ["dev", "test", "prod"],
   },
   pyspark: { files: pyspark, environments: ["dev", "prod"] },
+  standards: { files: standards, environments: ["dev", "test", "prod"] },
+  quality: { files: quality, environments: ["dev", "prod"] },
+  governed: { files: governed, environments: ["dev", "prod"] },
+  grants: { files: grants, environments: ["dev", "prod"] },
+  masked: { files: masked, environments: ["dev", "prod"] },
+  "masked-tables": { files: maskedTables, environments: ["dev", "prod"] },
 };
 
 describe("a PySpark transform whose names differ", () => {

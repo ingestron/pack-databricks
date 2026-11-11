@@ -1,0 +1,6 @@
+apiVersion: ingestron.io/v1
+kind: Platform
+id: lakehouse
+databricks:
+  workspace:
+    host: ${values.host}

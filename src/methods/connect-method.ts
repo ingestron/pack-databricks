@@ -1,6 +1,7 @@
 // The lakeflow-connect method: Databricks' managed connectors write the
 // tables themselves, so there is no store step and no SQL.
 import type { Method, ResolvedTable } from "@ingestron/definitions";
+import { changeAliases, connectIntent } from "./intent.js";
 
 /** Connectors that read through an ingestion gateway (database change capture). */
 export const gatewayConnectors = new Set(["sqlserver"]);
@@ -16,6 +17,9 @@ export const lakeflowConnect: Method = {
   connectivity: ["public", "workspace"],
   produces: "table",
   defaults: { mode: "upsert", columns: "contract" },
+  intentDefaults: { history: "latest" },
+  aliases: { mode: changeAliases.mode! },
+  intent: connectIntent,
   settings: {
     type: "object",
     additionalProperties: false,
@@ -94,12 +98,5 @@ function checkConnect(table: ResolvedTable): string[] {
   if (ingest.connection.connector === "kafka" && ingest.settings.mode !== "append") {
     problems.push("kafka topics can only be appended (mode: append)");
   }
-  const own = table.expectations
-    .filter((item) => item.from === "definition")
-    .map((item) => item.name);
-  if (own.length > 0)
-    problems.push(
-      `managed ingestion cannot run expectations (${own.join(", ")}); check the data in a transform`,
-    );
   return problems;
 }

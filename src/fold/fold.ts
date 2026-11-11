@@ -9,6 +9,7 @@ import {
   type TargetDifference,
 } from "@ingestron/definitions";
 import { build } from "../output/index.js";
+import { withAlerts } from "../bundle/index.js";
 import { foldFiles, type Folded } from "./fold-files.js";
 import { pipelineCatalog, planFold } from "./fold-plan.js";
 import { catalogProblems, continuousProblems, once, unlikeProblem } from "./fold-problems.js";
@@ -21,11 +22,15 @@ import { bundleView, sameFile, suppliedFor } from "../output/index.js";
  * const { files, deployValues, problems } = buildEnvironments({ dev: devModel, prod: prodModel });
  */
 export function buildEnvironments(models: Models): EnvironmentsBuild {
-  const { structural, differing } = compareTargets(models);
+  // The alerts as the bundle uses them, so that the lists it writes fold as values.
+  const built = Object.fromEntries(
+    Object.entries(models).map(([target, model]) => [target, withAlerts(model)]),
+  );
+  const { structural, differing } = compareTargets(built);
   if (structural.length > 0) return failed(structural);
   const early = [...catalogProblems(models, pipelineCatalog), ...continuousProblems(models)];
   if (early.length > 0) return failed(early);
-  const plan = planFold(models, differing);
+  const plan = planFold(built, differing);
   const folded = foldFiles(plan);
   const problems = once(plan.problems);
   if (problems.some((problem) => problem.severity === "error")) return failed(problems);

@@ -1,0 +1,19 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: shop.daily_sales
+version: 1.0.0
+status: active
+schema:
+  - name: daily_sales
+    logicalType: object
+    description: Order totals per customer and day.
+    properties:
+      - {
+          name: email,
+          logicalType: string,
+          required: true,
+          primaryKey: true,
+          primaryKeyPosition: 1,
+        }
+      - { name: day, logicalType: date, required: true, primaryKey: true, primaryKeyPosition: 2 }
+      - { name: total, logicalType: number, physicalType: "DECIMAL(18,2)" }

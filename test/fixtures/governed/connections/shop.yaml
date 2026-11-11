@@ -1,0 +1,8 @@
+apiVersion: ingestron.io/v1
+kind: Connection
+id: shop
+description: Files the web shop exports every hour.
+connector: files
+connectivity: public
+settings:
+  path: ${values.storage}/shop

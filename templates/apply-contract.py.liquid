@@ -1,14 +1,27 @@
 # {{ header }}
 # Runs after each refresh: Lakeflow pipelines cannot set tags or column
 # comments, nor compare counts over all rows, so this task does.
-import json
+{% if governance != "" %}# It also creates the mask functions, masks columns and filters rows with
+# policies, and drops the policies it made that are no longer declared.
+{% endif %}{% if access != "" %}# It also grants the tables to the principals of their roles, and with exact
+# grants revokes what they do not give.
+{% endif %}{% if access != "" and governance != "" %}# It grants only once the policies are made, so when one cannot be made,
+# no principal it grants reads unmasked or unfiltered rows.
+{% endif %}import json
 import sys
 
 from pyspark.sql import SparkSession
 
 STATEMENTS = json.loads(r"""{{ statements }}""")
 CHECKS = json.loads(r"""{{ checks }}""")
-# Values that differ between environments: the job passes each as a parameter
+{% if access != "" %}# Each table's grants, and whether to revoke the direct grants they do not give.
+ACCESS = json.loads(r"""{{ access }}""")
+# Principals whose grants are never revoked, besides the identity this task runs as.
+KEEP = json.loads(r"""{{ keep }}""")
+{% endif %}{% if governance != "" %}# The mask functions to create, the policies to make, and the places whose
+# Ingestron policies that are no longer made are dropped.
+GOVERNANCE = json.loads(r"""{{ governance }}""")
+{% endif %}# Values that differ between environments: the job passes each as a parameter
 # ingestron.<name>=<value>, and ${ingestron.<name>} above stands for it.
 VALUES = dict(argument.split("=", 1) for argument in sys.argv[1:] if "=" in argument)
 
@@ -48,11 +61,21 @@ def measure(spark, check):
     return counted
 
 
-def main():
+{% if access != "" or governance != "" %}{% render "quoted" %}
+
+{% endif %}{% if access != "" %}{% render "access" %}
+
+{% endif %}{% if governance != "" %}{% render "governance" %}
+
+{% endif %}def main():
     spark = SparkSession.builder.getOrCreate()
     for statement in STATEMENTS:
         spark.sql(with_values(statement))
-    failures = []
+{% if governance != "" %}    for statement in function_statements(GOVERNANCE["functions"]):
+        spark.sql(statement)
+    apply_policies(spark)
+{% endif %}{% if access != "" %}    apply_access(spark)
+{% endif %}    failures = []
     for check in CHECKS:
         measured = measure(spark, check)
         if passes(check["operator"], check["value"], measured):

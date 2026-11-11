@@ -1,0 +1,22 @@
+apiVersion: ingestron.io/v1
+kind: Flow
+id: shop
+description: Orders and customers from the web shop.
+source: shop
+tables:
+  orders:
+    object: orders
+    contract: shop.orders
+    # The latest row per key, ordered by updated_at, with deleted rows removed.
+    history: latest
+    sequence: updated_at
+    load: { deletes: { when: "op = 'D'" } }
+    store:
+      with: { except_columns: [op] }
+    expectations:
+      - { name: positive_total, check: total >= 0 }
+  customers:
+    object: customers
+    contract: shop.customers
+    ingest:
+      with: { format: csv, options: { header: true } }

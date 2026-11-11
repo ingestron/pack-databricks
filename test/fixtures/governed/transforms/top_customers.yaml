@@ -1,0 +1,9 @@
+apiVersion: ingestron.io/v1
+kind: Transform
+id: top_customers
+description: The customers with the most sales, which no role is granted.
+inputs: [daily_sales]
+layer: gold
+code: |
+  SELECT email, day, total FROM {{ tables.daily_sales }} WHERE total > 1000
+contract: shop.daily_sales

@@ -1,0 +1,3 @@
+def quoted(principal):
+    """A principal as SQL names it: in backticks, with each backtick in it doubled."""
+    return "`" + principal.replace("`", "``") + "`"

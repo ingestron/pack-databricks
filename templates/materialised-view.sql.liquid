@@ -2,3 +2,7 @@
 {% render "table", table: table %}
 AS
 {% if query != "" %}{{ query }}{% else %}{% render "read-files", source: source %}{% endif %};
+{%- if quarantine != "" %}
+
+{% render "quarantine", quarantine: quarantine %};
+{%- endif %}

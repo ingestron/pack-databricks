@@ -3,6 +3,9 @@
 // values that differ between environments into bundle variables.
 import type { ResolvedModel, ResolvedTable } from "@ingestron/definitions";
 import { stringify } from "yaml";
+import { jobAlerts } from "./alerts.js";
+import { jobOperations, taskOperations } from "./operations.js";
+import { tableGrants } from "../sql/index.js";
 
 /** A YAML document as data. */
 export type Data = Record<string, unknown>;
@@ -56,9 +59,20 @@ export function pipelineFile(
     root_path: `../src/${names.pipeline}`,
     libraries: [{ glob: { include: `../src/${names.pipeline}/**` } }],
   };
-  return {
-    resources: { pipelines: { [names.pipeline]: { ...pipeline, ...pipelineExtras(model) } } },
-  };
+  const extras = { ...pipelineExtras(model), ...eventLog(model, tables, pipeline) };
+  return { resources: { pipelines: { [names.pipeline]: { ...pipeline, ...extras } } } };
+}
+
+/**
+ * With quality results, the pipeline publishes its event log, where the expectation
+ * metrics are, to `<pipeline>_event_log` in the pipeline's own catalog and schema: when the
+ * standard keeps them, or any of the pipeline's tables does.
+ */
+export function eventLog(model: ResolvedModel, tables: ResolvedTable[], pipeline: Data): Data {
+  const kept = model.qualityResults || tables.some((table) => table.quality?.results === true);
+  if (!kept) return {};
+  const { name, catalog, schema } = pipeline;
+  return { event_log: { catalog, schema, name: `${String(name)}_event_log` } };
 }
 
 /** A task of the refresh job: a pipeline to refresh, or a Python file to run, after others. */
@@ -76,11 +90,13 @@ const environment = { environment_key: "ingestron", spec: { environment_version:
 /**
  * A job that refreshes the pipelines in order, on the platform's schedule.
  * With a Python task it is built without a schedule too, to run on demand.
+ * Its alerts come from a model built `withAlerts`.
  */
 export function jobFile(model: ResolvedModel, tasks: Task[]): Data | undefined {
   const { platform, names } = model;
   const python = tasks.some((task) => task.python);
   if ((!platform.schedule && !python) || tasks.length === 0) return undefined;
+  const pipelineTask = taskOperations(model);
   const job: Data = {
     name: names.job,
     ...(platform.schedule && {
@@ -90,21 +106,22 @@ export function jobFile(model: ResolvedModel, tasks: Task[]): Data | undefined {
         pause_status: platform.schedule.paused ? "PAUSED" : "UNPAUSED",
       },
     }),
-    tasks: tasks.map(jobTask),
+    ...jobOperations(model),
+    tasks: tasks.map((task) => jobTask(task, pipelineTask)),
     ...(python && { environments: [environment] }),
   };
   if (Object.keys(platform.tags).length > 0) job.tags = platform.tags;
-  if (platform.notifications.on_failure.length > 0)
-    job.email_notifications = { on_failure: platform.notifications.on_failure };
-  return { resources: { jobs: { [names.job]: job } } };
+  return { resources: { jobs: { [names.job]: { ...job, ...jobAlerts(model) } } } };
 }
 
-function jobTask(task: Task): Data {
+/** A task of the job; a pipeline task also takes `pipelineTask`, its retries. */
+function jobTask(task: Task, pipelineTask: Data): Data {
   return {
     task_key: task.key,
     ...(task.after.length > 0 && { depends_on: task.after.map((key) => ({ task_key: key })) }),
     ...(task.pipeline && {
       pipeline_task: { pipeline_id: `\${resources.pipelines.${task.pipeline}.id}` },
+      ...pipelineTask,
     }),
     ...(task.python && {
       environment_key: environment.environment_key,
@@ -145,13 +162,16 @@ export function schemaRef(keys: Map<string, string>, catalog: string, schema: st
   return key ? `\${resources.schemas.${key}.name}` : schema;
 }
 
-/** Managed schemas, with the platform's grants for their layer. */
+/**
+ * Managed schemas, with the platform's grants for their layer, and USE_SCHEMA for each
+ * principal granted on their tables (none with `manage.grants` off).
+ */
 export function schemasFile(model: ResolvedModel, keys: Map<string, string>): Data | undefined {
   if (keys.size === 0) return undefined;
   const schemas: Data = {};
   for (const table of uniqueSchemas(model.tables)) {
     const key = keys.get(`${table.fullName.catalog}.${table.fullName.schema}`) as string;
-    const grants = model.platform.grants[table.layer] ?? [];
+    const grants = withUseSchema(model.platform.grants[table.layer] ?? [], granted(model, table));
     schemas[key] = {
       catalog_name: table.fullName.catalog,
       name: table.fullName.schema,
@@ -160,6 +180,32 @@ export function schemasFile(model: ResolvedModel, keys: Map<string, string>): Da
     };
   }
   return { resources: { schemas } };
+}
+
+type SchemaGrant = ResolvedModel["platform"]["grants"][string][number];
+
+/** The principals granted on the tables in the table's schema, in the order first granted. */
+function granted(model: ResolvedModel, table: ResolvedTable): string[] {
+  const same = (other: ResolvedTable) =>
+    other.fullName.catalog === table.fullName.catalog &&
+    other.fullName.schema === table.fullName.schema;
+  const principals = model.tables
+    .filter(same)
+    .flatMap((other) => tableGrants(model, other).map((grant) => grant.principal));
+  return [...new Set(principals)];
+}
+
+/** The platform's grants, with USE_SCHEMA added to each principal's, or a grant of its own. */
+function withUseSchema(grants: SchemaGrant[], principals: string[]): SchemaGrant[] {
+  const added = grants.map((grant) =>
+    principals.includes(grant.principal) && !grant.privileges.includes("USE_SCHEMA")
+      ? { ...grant, privileges: [...grant.privileges, "USE_SCHEMA"] }
+      : grant,
+  );
+  const own = principals
+    .filter((principal) => !grants.some((grant) => grant.principal === principal))
+    .map((principal) => ({ principal, privileges: ["USE_SCHEMA"] }));
+  return [...added, ...own];
 }
 
 function uniqueSchemas(tables: ResolvedTable[]): ResolvedTable[] {
@@ -178,7 +224,10 @@ export function pipelineTags(model: ResolvedModel): Data {
   return Object.keys(tags).length > 0 ? { tags } : {};
 }
 
-/** Tags and failure notifications, the same on every pipeline that builds tables. */
+/**
+ * Tags and failure notifications, the same on every pipeline that builds tables. The
+ * notifications come from a model built `withAlerts`.
+ */
 export function pipelineExtras(model: ResolvedModel): Data {
   const { platform } = model;
   const alerts = ["on-update-failure", "on-update-fatal-failure", "on-flow-failure"];

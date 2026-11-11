@@ -2,6 +2,7 @@
 // its settings schema, and checks that need the whole table.
 import type { Method, ResolvedTable } from "@ingestron/definitions";
 import { renderQuery } from "../sql/index.js";
+import { changeAliases, clusterAlias, filesIntent, viewIntent } from "./intent.js";
 
 const clusterBy = {
   description: "How the table is clustered: auto, none, or a list of columns.",
@@ -27,6 +28,8 @@ export const files: Method = {
   connectors: ["files"],
   connectivity: ["public", "workspace"],
   produces: "files",
+  intentDefaults: { load: { mode: "files" } },
+  intent: filesIntent,
   defaults: {
     format: "parquet",
     schema_evolution: "addNewColumns",
@@ -95,6 +98,8 @@ export const streamingTable: Method = {
   accepts: ["files"],
   produces: "table",
   defaults: { mode: "append", cluster_by: "auto", properties: {}, changes_suffix: "_changes" },
+  intentDefaults: { history: "none" },
+  aliases: { ...changeAliases, cluster_by: clusterAlias },
   placement: storePlacement,
   settings: {
     type: "object",
@@ -144,6 +149,8 @@ export const materialisedView: Method = {
   accepts: ["files", "table", "query"],
   produces: "table",
   defaults: { cluster_by: "auto", properties: {} },
+  intent: viewIntent,
+  aliases: { cluster_by: clusterAlias },
   placement: storePlacement,
   settings: {
     type: "object",
@@ -165,7 +172,18 @@ export const sql: Method = {
   },
 };
 
+/**
+ * True when the table declares a delete condition as intent, not through `delete_when`, but
+ * keeps no history: an appending table applies no deletes.
+ */
+function deletesWithoutHistory(table: ResolvedTable): boolean {
+  const origin = table.intentOrigins["load.deletes.when"];
+  const declared = origin !== undefined && origin.layer !== "pack" && origin.alias === undefined;
+  return declared && table.intent.history === "none";
+}
+
 function checkChangeData(table: ResolvedTable): string[] {
+  if (deletesWithoutHistory(table)) return ["a delete condition needs history latest or full"];
   const settings = table.store?.settings ?? {};
   if (settings.mode === "append") return [];
   const problems: string[] = [];

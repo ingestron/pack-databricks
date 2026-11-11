@@ -1,0 +1,69 @@
+def quoted_name(name):
+    """A dotted name as SQL names it: each part quoted as a principal is."""
+    return ".".join(quoted(part) for part in name.split("."))
+
+
+def function_statements(functions):
+    """The statement that creates each mask function Ingestron owns.
+
+    Each takes and returns VARIANT, so one function masks a column of any type:
+    Databricks casts the column's value to VARIANT and the result back.
+    """
+    return [
+        f"CREATE OR REPLACE FUNCTION {quoted_name(with_values(function['name']))}(val VARIANT) RETURNS VARIANT DETERMINISTIC RETURN {function['returns']}"
+        for function in functions
+    ]
+
+
+def exempt_principals(runner, unmasked):
+    """The principals every policy exempts: first runner, then each unmasked one.
+
+    runner is the identity this task runs as, the run_as identity that refreshes
+    the pipelines: exempt, it reads real values, so no table it writes keeps
+    masked or filtered data. Each principal is named once, in any letter case.
+    """
+    exempt = []
+    for principal in [runner, *unmasked]:
+        if principal.lower() not in [item.lower() for item in exempt]:
+            exempt.append(principal)
+    return exempt
+
+
+def policy_statement(policy, exempt):
+    """The policy, applied to every account user except the exempt principals."""
+    target = "ON COLUMN c" if policy["kind"] == "COLUMN MASK" else "USING COLUMNS (c)"
+    return (
+        f"CREATE OR REPLACE POLICY {quoted(policy['name'])} ON {with_values(policy['on'])} "
+        f"{policy['kind']} {quoted_name(with_values(policy['function']))} "
+        f"TO `account users` EXCEPT {', '.join(map(quoted, exempt))} "
+        f"FOR TABLES MATCH COLUMNS {policy['match']} AS c {target}"
+    )
+
+
+def stale_drops(rows, place, owned):
+    """The statements that drop the place's Ingestron policies no longer made.
+
+    rows are the place's SHOW POLICIES rows. A policy is dropped only when its
+    name starts with a prefix in owned, of the switches that are on, and is not
+    one the place keeps, both in any letter case. Every other policy is kept,
+    and so is a row without a policy_name.
+    """
+    kept = {name.lower() for name in place["policies"]}
+    statements = []
+    for row in rows:
+        name = row.get("policy_name") or ""
+        if name.lower().startswith(tuple(owned)) and name.lower() not in kept:
+            statements.append(f"DROP POLICY {quoted(name)} ON {with_values(place['on'])}")
+    return list(dict.fromkeys(statements))
+
+
+def apply_policies(spark):
+    """Makes each mask and filter policy, then drops the Ingestron policies no longer made."""
+    runner = spark.sql("SELECT session_user()").first()[0]
+    exempt = exempt_principals(runner, [with_values(principal) for principal in GOVERNANCE["unmasked"]])
+    for policy in GOVERNANCE["policies"]:
+        spark.sql(policy_statement(policy, exempt))
+    for place in GOVERNANCE["places"]:
+        shown = spark.sql(f"SHOW POLICIES ON {with_values(place['on'])}").collect()
+        for statement in stale_drops([row.asDict() for row in shown], place, GOVERNANCE["owned"]):
+            spark.sql(statement)

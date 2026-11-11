@@ -35,6 +35,13 @@ export function variableName(...parts: string[]): string {
  */
 export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean): Place {
   const [area, index, ...rest] = segments(pointer);
+  const role = roleAt(model, pointer);
+  if (role !== undefined) return principalPlace(role);
+  if (pointer === functionsPointer)
+    return {
+      name: "governance_functions",
+      description: "Schema of the functions that masks and row filters use.",
+    };
   if (area === "tables") return tablePlace(model, Number(index), rest, pipeline);
   const path = [index ?? "", ...rest].filter(Boolean);
   const setting = path.filter((part) => !/^\d+$/.test(part)).join(".");
@@ -46,10 +53,36 @@ export function placeOf(pointer: string, model: ResolvedModel, pipeline: boolean
   };
 }
 
+/** The Platform's `databricks.governance.functions`, the schema of the masks' functions. */
+const functionsPointer = "/platform/sections/databricks/governance/functions";
+
+/** The platform's principal of a role, and a table's grant's principal. */
+const platformRole = /^\/platform\/principals\/([^/]+)$/;
+const grantRole = /^\/tables\/(\d+)\/access\/grants\/(\d+)\/principal$/;
+
+/**
+ * The role whose principal is at a place: in the platform's `principals`, or in a table's
+ * grant. Both are one variable per role, so every grant of a role shares it.
+ */
+function roleAt(model: ResolvedModel, pointer: string): string | undefined {
+  if (platformRole.test(pointer)) return segments(pointer)[2];
+  const grant = grantRole.exec(pointer);
+  if (!grant) return undefined;
+  return model.tables[Number(grant[1])]?.access?.grants[Number(grant[2])]?.role;
+}
+
+function principalPlace(role: string): Place {
+  return {
+    name: variableName("principal", role),
+    description: `Principal of the role ${role}.`,
+  };
+}
+
 function tablePlace(model: ResolvedModel, index: number, rest: string[], pipeline: boolean): Place {
   const table = model.tables[index]!;
   const [part, key, ...more] = rest;
-  if (part === "fullName") return namePlace(model, table.layer, table.name, key!, pipeline);
+  const name = fullNameAt(table.name, rest);
+  if (name) return namePlace(model, table.layer, name.table, name.key, pipeline);
   if (part === "ingest" && key === "connection" && more[0] === "settings") {
     const id = table.ingest!.connection.id;
     const setting = more.slice(1);
@@ -66,6 +99,17 @@ function tablePlace(model: ResolvedModel, index: number, rest: string[], pipelin
     name: variableName(table.name, ...path.filter((item) => item !== "settings")),
     description: `The value of ${path.join(".")} for table ${table.name}.`,
   };
+}
+
+/**
+ * The table and the part of its full name at a place: the table's own, or its quarantine
+ * table's, which is in the table's catalog and schema, so the two fold alike.
+ */
+function fullNameAt(table: string, [part, key, next]: string[]) {
+  if (part === "fullName") return { table, key: key! };
+  if (part === "quarantine" && key === "fullName")
+    return { table: `${table}_quarantine`, key: next! };
+  return undefined;
 }
 
 function folderOf(setting: string, step: string): string {

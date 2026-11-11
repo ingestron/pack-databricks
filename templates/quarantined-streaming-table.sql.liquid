@@ -1,0 +1,10 @@
+-- {{ header }}
+-- Every row as read, once: the table keeps those that pass its checks, and its
+-- quarantine those that a check with the action drop removes.
+CREATE OR REFRESH PRIVATE STREAMING TABLE {{ checked }}
+AS {% render "read-files", source: source %};
+
+{% render "table", table: table %}
+AS SELECT * FROM STREAM({{ checked }});
+
+{% render "quarantine", quarantine: quarantine %};

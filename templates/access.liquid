@@ -1,0 +1,77 @@
+def grant_statements(item):
+    """The GRANT statement for each principal the table's access names."""
+    return [
+        f"GRANT {', '.join(grant['privileges'])} ON TABLE {item['table']} TO {quoted(grant['principal'])}"
+        for grant in item["grants"]
+    ]
+
+
+def privilege_of(row):
+    """A SHOW GRANTS row's action as REVOKE names it: upper case, with spaces."""
+    return (row.get("actionType") or "").replace("_", " ").strip().upper()
+
+
+def revocable(row, name, kept):
+    """True for a privilege granted on the table itself to a principal not kept.
+
+    A row the table inherits names its schema or catalog as objectKey, so it is
+    kept, as are ownership, denials (DENY or DENIED, any action starting DEN)
+    and any action that is not a privilege name.
+    """
+    action = privilege_of(row)
+    return (
+        (row.get("objectKey") or "").replace("`", "").lower() == name
+        and action.replace(" ", "").isalpha()
+        and action.isascii()
+        and action not in ("OWN", "OWNERSHIP")
+        and not action.startswith("DEN")
+        and row["principal"].lower() not in kept
+    )
+
+
+def revokes(rows, item, keep):
+    """The statements that take away what the table's access does not give.
+
+    rows are the table's SHOW GRANTS rows. Each privilege granted directly on the
+    table to a principal the access does not name, or that its grant does not
+    give, is revoked, once. Principals compare in any letter case, so a principal
+    named or kept in another case is never revoked as a stranger. ALL PRIVILEGES
+    of a named principal is revoked, then its grant made again.
+    """
+    name = item["name"].lower()
+    kept = {principal.lower() for principal in keep}
+    granted = {}
+    for grant in item["grants"]:
+        granted.setdefault(grant["principal"].lower(), []).append(grant)
+    statements = []
+    for row in rows:
+        if not revocable(row, name, kept):
+            continue
+        action = privilege_of(row)
+        grants = granted.get(row["principal"].lower(), [])
+        if any(action in grant["privileges"] for grant in grants):
+            continue
+        statements.append(f"REVOKE {action} ON TABLE {item['table']} FROM {quoted(row['principal'])}")
+        if action == "ALL PRIVILEGES":
+            statements.extend(grant_statements({**item, "grants": grants}))
+    return list(dict.fromkeys(statements))
+
+
+def with_item_values(item):
+    """The table's access with each ${ingestron.<name>} replaced, before it is quoted."""
+    grants = [{**grant, "principal": with_values(grant["principal"])} for grant in item["grants"]]
+    names = {"table": with_values(item["table"]), "name": with_values(item["name"])}
+    return {**item, **names, "grants": grants}
+
+
+def apply_access(spark):
+    """Grants each table's access; with exact grants, then revokes what it does not give."""
+    keep = [with_values(principal) for principal in KEEP]
+    keep.append(spark.sql("SELECT session_user()").first()[0])
+    for item in map(with_item_values, ACCESS):
+        for statement in grant_statements(item):
+            spark.sql(statement)
+        if item["exact"]:
+            shown = spark.sql(f"SHOW GRANTS ON TABLE {item['table']}").collect()
+            for statement in revokes([row.asDict() for row in shown], item, keep):
+                spark.sql(statement)
