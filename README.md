@@ -121,7 +121,7 @@ case). A workspace host supplied this way is `DATABRICKS_HOST`.
 in that environment. It is not deployed, and neither are `.generated.json` and
 `.generated.lock`, which `ingestron` keeps in the folder.
 
-The after-refresh task (tags, column comments, grants, policies and table
+The after-refresh task (tags, column comments, policies, grants and table
 checks) is
 `tasks/<pipeline>/apply_contract.py`, outside the pipeline's `src/<pipeline>/`
 sources, so that only the refresh job runs it.
