@@ -25,12 +25,21 @@ const notApplied = (table: ResolvedTable, feature: string) =>
   (table.notApplied ?? []).some((item) => item.feature === feature);
 
 /**
+ * True when the task may grant on the table: `manage.grants` is on, and Databricks keeps it.
+ * A table that ends at the landed files is not in Unity Catalog, even when another pack serves
+ * it and the definitions give it access.
+ */
+const granting = (model: ResolvedModel, table: ResolvedTable) =>
+  model.platform.manage.grants === true && !table.endsAtFiles;
+
+/**
  * The grants the task makes on the table: one per principal, in the order first granted,
  * `SELECT` and, for write unless not applied there, `MODIFY`. Empty with `manage.grants`
- * off, without access, or when the table's grants are not applied.
+ * off, for a table that ends at the landed files, without access, or when the table's
+ * grants are not applied.
  */
 export function tableGrants(model: ResolvedModel, table: ResolvedTable): TableGrant[] {
-  if (!model.platform.manage.grants || !table.access || notApplied(table, "grants")) return [];
+  if (!granting(model, table) || !table.access || notApplied(table, "grants")) return [];
   const write = !notApplied(table, "write");
   const joined = new Map<string, Set<"SELECT" | "MODIFY">>();
   for (const grant of table.access.grants) {
@@ -47,7 +56,7 @@ export function tableGrants(model: ResolvedModel, table: ResolvedTable): TableGr
 
 /** True when the task revokes the table's direct grants that its access does not give. */
 export function exactOn(model: ResolvedModel, table: ResolvedTable): boolean {
-  if (!model.platform.manage.grants || !table.access?.exact) return false;
+  if (!granting(model, table) || !table.access?.exact) return false;
   return !notApplied(table, "grants") && !notApplied(table, "exact");
 }
 

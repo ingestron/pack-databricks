@@ -869,6 +869,11 @@ applied, and never judges it again:
 
 - With `manage.grants` off, nothing below is built, and the files are what
   they were before grants existed.
+- Only the tables Databricks keeps count. A table that ends at the landed
+  files is not in Unity Catalog, even when another pack serves it (a Synapse
+  view over the files ADF lands, which the definitions give `access`): the
+  pack grants nothing on it, runs no `SHOW GRANTS` on it, adds no `USE_SCHEMA`
+  for it to a managed schema and names it in no request line.
 - A table's grants, unless its `notApplied` lists `grants`. Each principal
   gets `SELECT`, and `MODIFY` for `write` unless `notApplied` lists `write`
   (a materialised view). The grants of one principal on one table are joined:
