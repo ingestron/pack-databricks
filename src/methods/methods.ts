@@ -72,7 +72,7 @@ export const files: Method = {
       },
       schema_hints: {
         type: "boolean",
-        description: "Pass the contract's column types as schemaHints.",
+        description: "Pass the table's column types as schemaHints.",
       },
       options: {
         type: "object",
