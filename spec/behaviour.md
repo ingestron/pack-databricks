@@ -756,12 +756,12 @@ The expressions go in the `SELECT` that builds the table's rows:
 
 - **A table that reads files** (a streaming table, the changes table of a
   change-data table, or a materialised view over `read_files`) and cleanses a
-  column: the select list names the contract's columns first, in the
-  contract's order, as the DuckDB and Synapse packs select them: a cleansed
+  column: the select list names the table's columns first, in their
+  order, as the DuckDB and Synapse packs select them: a cleansed
   column as `<expression> AS <c>`, a renamed one as `<source> AS <c>` (its
   expression starting from its source name when it is cleansed too, so it is
   selected once), and any other as `<c>`. Then come the other columns read,
-  `* EXCEPT (<the contract's columns as read>, <text timestamps>)`, then each
+  `* EXCEPT (<the table's columns as read>, <text timestamps>)`, then each
   text timestamp as `CAST(<t> AS TIMESTAMP) AS <t>` (section 2). A table that
   cleanses no column keeps the select list of section 2. A change-data table
   cleanses its changes, so AUTO CDC keeps cleansed rows.
