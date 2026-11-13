@@ -170,7 +170,7 @@ that declares no intent gets the same files as with 2.2.
   and deduplicate on such a table are `NOT_APPLIED` warnings that say to do
   them in a transform in the next layer. An expectation written on the flow
   table is no longer an error.
-- Needs `@ingestron/definitions` 1.13 or later.
+- Needs `@ingestron/definitions` 1.14 or later.
 
 ## What changed in 2.0
 
