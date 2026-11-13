@@ -1,6 +1,6 @@
 {
   "name": "@ingestron/pack-databricks",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Databricks methods for Ingestron: generates a bundle with a Lakeflow Spark Declarative Pipeline.",
   "license": "Apache-2.0",
   "author": "Ingestron <hello@ingestron.io>",
