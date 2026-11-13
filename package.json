@@ -50,11 +50,11 @@
     "yaml": "2.9.1"
   },
   "peerDependencies": {
-    "@ingestron/definitions": "^1.13.0"
+    "@ingestron/definitions": "^1.14.0"
   },
   "devDependencies": {
     "@ingestron/config": "^1.5.0",
-    "@ingestron/definitions": "^1.13.0",
+    "@ingestron/definitions": "^1.14.0",
     "@microsoft/api-extractor": "7.59.4",
     "@types/node": "22.20.5",
     "ajv": "8.20.0",
