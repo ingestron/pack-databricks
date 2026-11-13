@@ -35,7 +35,7 @@ export const lakeflowConnect: Method = {
       },
       columns: {
         enum: ["contract", "all"],
-        enumDescriptions: ["Only the contract's columns.", "Every source column."],
+        enumDescriptions: ["Only the table's columns.", "Every source column."],
         description: "Which source columns are ingested.",
       },
       gateway_policy_id: {

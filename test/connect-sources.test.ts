@@ -1,5 +1,6 @@
 // Lakeflow Connect: Salesforce, Kafka, and ingestion before our own pipeline.
 import { describe, expect, it } from "vitest";
+import { databricks } from "../src/index.js";
 import { connection, contract, flow, generate } from "./connect-helpers.js";
 
 const sqlServer = {
@@ -26,7 +27,7 @@ describe("Salesforce", () => {
     });
   });
 
-  it("takes only the contract's columns when appending too", () => {
+  it("takes only the table's columns when appending too", () => {
     const append = flow(
       "crm",
       "crm",
@@ -134,5 +135,22 @@ describe("together with our own pipeline", () => {
         pipeline_task: { pipeline_id: "${resources.pipelines.shop.id}" },
       },
     ]);
+  });
+});
+
+describe("settings that name the table's columns", () => {
+  it("say the table's columns, since a table's columns can come from source metadata", () => {
+    type Settings = {
+      properties: Record<string, { description?: string; enumDescriptions?: string[] }>;
+    };
+    const connect = databricks.methods["lakeflow-connect"]!.settings as Settings;
+    expect(connect.properties.columns!.enumDescriptions).toEqual([
+      "Only the table's columns.",
+      "Every source column.",
+    ]);
+    const files = databricks.methods.files!.settings as Settings;
+    expect(files.properties.schema_hints!.description).toBe(
+      "Pass the table's column types as schemaHints.",
+    );
   });
 });

@@ -9,13 +9,13 @@ per project. Name it in your standard: `packs: [databricks@2]`.
 What it uses on Databricks:
 
 - **Lakeflow Connect:** SQL Server (through an ingestion gateway), Salesforce
-  and Kafka, through Unity Catalog connections; only the contract's columns,
+  and Kafka, through Unity Catalog connections; only the table's columns,
   SCD type 1 or 2.
 - **Ingestion with Auto Loader:** streaming tables over
-  `STREAM read_files(…)`, with schema hints from the contract and a schema
-  evolution mode.
+  `STREAM read_files(…)`, with schema hints from the table's column types and
+  a schema evolution mode.
 - **Change data with AUTO CDC:** `mode: upsert` (SCD type 1) or
-  `mode: history` (SCD type 2), keyed by the contract's primary key.
+  `mode: history` (SCD type 2), keyed by the table's primary key.
 - **Expectations:** from required columns, the contract's rules and your own
   checks, with `warn`, `drop` or `fail` per check, and a quarantine table for
   the rows a check drops.

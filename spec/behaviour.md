@@ -756,12 +756,12 @@ The expressions go in the `SELECT` that builds the table's rows:
 
 - **A table that reads files** (a streaming table, the changes table of a
   change-data table, or a materialised view over `read_files`) and cleanses a
-  column: the select list names the contract's columns first, in the
-  contract's order, as the DuckDB and Synapse packs select them: a cleansed
+  column: the select list names the table's columns first, in the order the table
+  lists them, as the DuckDB and Synapse packs select them: a cleansed
   column as `<expression> AS <c>`, a renamed one as `<source> AS <c>` (its
   expression starting from its source name when it is cleansed too, so it is
   selected once), and any other as `<c>`. Then come the other columns read,
-  `* EXCEPT (<the contract's columns as read>, <text timestamps>)`, then each
+  `* EXCEPT (<the table's columns as read>, <text timestamps>)`, then each
   text timestamp as `CAST(<t> AS TIMESTAMP) AS <t>` (section 2). A table that
   cleanses no column keeps the select list of section 2. A change-data table
   cleanses its changes, so AUTO CDC keeps cleansed rows.
@@ -1017,7 +1017,7 @@ columns of several types (references.md): Databricks casts the column's value
 to `VARIANT` and the result back to the column's type. `hash` and `redact` work
 on text: the definitions package refuses them for a column whose
 `logicalType` is not `string` (`MASK_TYPE`), and for a value that is not text,
-such as on a column whose type the contract does not give, they return
+such as on a column whose type the table does not give, they return
 `NULL`, which casts to any type, rather than a text that would fail the cast:
 
 - `null`: `NULL::VARIANT`;
@@ -1025,7 +1025,7 @@ such as on a column whose type the contract does not give, they return
 - `redact`: `CASE WHEN schema_of_variant(val) = 'STRING' THEN '****'::VARIANT ELSE NULL::VARIANT END`.
 
 **The tables beside a table.** The pack creates tables of its own beside some
-tables, which hold their columns under the contract's names:
+tables, which hold their columns under the table's column names:
 
 - `<table><changes_suffix>`, the changes a streaming table that keeps history
   reads (`_changes` by default), a streaming table;
