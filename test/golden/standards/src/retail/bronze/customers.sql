@@ -6,7 +6,12 @@ CREATE OR REFRESH STREAMING TABLE `bronze`.`customers` (
 COMMENT 'Web shop customers.'
 CLUSTER BY AUTO
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
-AS SELECT *, current_timestamp() AS _loaded_at, _metadata.file_path AS _source_file, _metadata.file_modification_time AS _source_modified_at FROM STREAM read_files(
+AS SELECT
+  *,
+  current_timestamp() AS _loaded_at,
+  _metadata.file_path AS _source_file,
+  _metadata.file_modification_time AS _source_modified_at
+FROM STREAM read_files(
   '${ingestron.shop_path}/customers',
   format => 'csv',
   schemaHints => '`id` BIGINT, `email` STRING',

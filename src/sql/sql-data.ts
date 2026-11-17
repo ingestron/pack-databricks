@@ -84,7 +84,7 @@ export function sourceData(table: ResolvedTable, stream: boolean): SourceData {
   return {
     stream,
     // Only a streaming table adds audit and rescued columns (spec/behaviour.md, section 2).
-    select: [selectOf(table), ...(stream ? auditColumns(table) : [])].join(", "),
+    select: [selectOf(table), ...(stream ? auditColumns(table) : [])].join(",\n  "),
     path: sqlString(pathOf(table)),
     options: optionsOf(table, stream),
   };
@@ -132,7 +132,7 @@ function selectOf(table: ResolvedTable): string {
     ...renamed.map((column) => `${quoteName(column.physicalName!)} AS ${quoteName(column.name)}`),
     ...casts,
   ];
-  return `* EXCEPT (${sources.join(", ")}), ${aliases.join(", ")}`;
+  return `* EXCEPT (${sources.join(", ")}),\n  ${aliases.join(",\n  ")}`;
 }
 
 /**
@@ -157,7 +157,7 @@ function inContractOrder(
       : `${selected} AS ${quoteName(column.name)}`;
   });
   const except = [...table.contract.columns.map(read), ...others];
-  return [...columns, `* EXCEPT (${except.join(", ")})`, ...after].join(", ");
+  return [...columns, `* EXCEPT (${except.join(", ")})`, ...after].join(",\n  ");
 }
 
 /** The connection's `path` joined with the table's object. */

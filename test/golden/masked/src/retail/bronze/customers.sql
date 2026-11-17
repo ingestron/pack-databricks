@@ -2,7 +2,9 @@
 -- Every row as read, once: the table keeps those that pass its checks, and its
 -- quarantine those that a check with the action drop removes.
 CREATE OR REFRESH PRIVATE STREAMING TABLE `customers_checked`
-AS SELECT * FROM STREAM read_files(
+AS SELECT
+  *
+FROM STREAM read_files(
   '${ingestron.shop_path}/customers',
   format => 'csv',
   schemaHints => '`id` BIGINT, `email` STRING, `country` STRING',
@@ -17,11 +19,16 @@ CREATE OR REFRESH STREAMING TABLE `bronze`.`customers` (
 COMMENT 'Web shop customers.'
 CLUSTER BY AUTO
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
-AS SELECT * FROM STREAM(`customers_checked`);
+AS
+SELECT *
+FROM STREAM(`customers_checked`);
 
 -- Rows that a check with the action drop removed from customers, with the checks they failed.
 CREATE OR REFRESH STREAMING TABLE `bronze`.`customers_quarantine`
 COMMENT 'Rows of customers that failed a check that drops rows; _failed_checks names the checks.'
-AS SELECT *, filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`email` IS NOT NULL, NULL, 'email_not_null')), name -> name IS NOT NULL) AS _failed_checks
+AS
+SELECT
+  *,
+  filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`email` IS NOT NULL, NULL, 'email_not_null')), name -> name IS NOT NULL) AS _failed_checks
 FROM STREAM(`customers_checked`)
 WHERE NOT coalesce((`id` IS NOT NULL) AND (`email` IS NOT NULL), FALSE);

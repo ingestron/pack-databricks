@@ -20,7 +20,9 @@ CREATE OR REFRESH STREAMING TABLE `bronze`.`customers` (
 )
 COMMENT 'CRM customers.'
 CLUSTER BY AUTO
-AS SELECT * FROM STREAM read_files(
+AS SELECT
+  *
+FROM STREAM read_files(
   '${ingestron.crm_path}/customers',
   format => 'json',
   schemaHints => '`id` BIGINT, `email` STRING, `name` STRING, `country` STRING, `status` STRING, `segment` STRING, `phone` STRING, `code` STRING, `age` BIGINT, `score` BIGINT, `tags` ARRAY<STRING>, `vip` BOOLEAN, `signed_up` TIMESTAMP, `contacted_at` TIMESTAMP, `last_seen` TIMESTAMP_NTZ, `updated_at` TIMESTAMP',

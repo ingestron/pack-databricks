@@ -3,7 +3,9 @@ CREATE OR REFRESH STREAMING TABLE `${ingestron.schema_bronze}`.`orders` (
   CONSTRAINT `id_not_null` EXPECT (`id` IS NOT NULL)
 )
 CLUSTER BY AUTO
-AS SELECT * FROM STREAM read_files(
+AS SELECT
+  *
+FROM STREAM read_files(
   '/Volumes/main/landing/shop/orders',
   format => 'parquet',
   schemaHints => '`id` BIGINT, `total` DOUBLE',

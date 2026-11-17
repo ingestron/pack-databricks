@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // What targets may not differ in, and what the fold does with the values
 // Databricks sets per target: tags and the schedule's pause as presets.
 import { describe, expect, it } from "vitest";
@@ -106,8 +107,10 @@ describe("values in a transform's code", () => {
       "  dev: { values: { crm: dev_crm.core } }\n  prod: { values: { crm: prod_crm.core } }\n";
     const models = resolveAll(shop(environments, { "daily.yaml": daily }), ["dev", "prod"]);
     const { files } = fold(models);
-    expect(files["src/shop/silver/daily.sql"]).toContain(
-      "SELECT * FROM `bronze`.`orders` JOIN ${ingestron.daily_value}.core.customers USING (id)",
+    expect(compactSql(files["src/shop/silver/daily.sql"])).toContain(
+      compactSql(
+        "SELECT * FROM `bronze`.`orders` JOIN ${ingestron.daily_value}.core.customers USING (id)",
+      ),
     );
     expect(yamlOf(files, "databricks.yml").targets.prod.variables.daily_value).toBe("prod_crm");
     expect(foldFailures(models)).toEqual([]);
