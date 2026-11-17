@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Cleansing, time zones and deduplicate in the table's SELECT (spec/behaviour.md, section 8.5).
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
@@ -7,16 +8,20 @@ import { asView, built, modelOf, quality, shopWith, withStatus } from "./quality
 describe("cleansing", () => {
   it("wraps a transform's query and cleanses each column in the model's order of operations", () => {
     const sql = built(quality)["src/crm/silver/customers_clean.sql"]!;
-    const select = sql.slice(sql.indexOf("FROM (\nSELECT `id`, "), sql.indexOf(") AS source"));
+    const select = sql.slice(sql.indexOf("FROM (\nSELECT\n  `id`,"), sql.indexOf(") AS source"));
     // The contract's columns in its order, cleansed or not, then the query's other columns.
-    expect(select).toContain(
-      "FROM (\nSELECT `id`, lower(nullif(trim(`email`), '')) AS `email`, nullif(`name`, '') AS `name`, upper(",
+    expect(compactSql(select)).toContain(
+      compactSql(
+        "FROM (\nSELECT `id`, lower(nullif(trim(`email`), '')) AS `email`, nullif(`name`, '') AS `name`, upper(",
+      ),
     );
     expect(select).toContain(
-      ", nullif(trim(`code`), '') AS `code`, `age`, CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`, `tags`, coalesce(`vip`, FALSE) AS `vip`, ",
+      ",\n  nullif(trim(`code`), '') AS `code`,\n  `age`,\n  CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`,\n  `tags`,\n  coalesce(`vip`, FALSE) AS `vip`,\n",
     );
-    expect(select).toContain(
-      " AS `updated_at`, * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)\nFROM (",
+    expect(compactSql(select)).toContain(
+      compactSql(
+        " AS `updated_at`, * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)\nFROM (",
+      ),
     );
     for (const expression of [
       "lower(nullif(trim(`email`), '')) AS `email`",
@@ -30,15 +35,17 @@ describe("cleansing", () => {
       "convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`",
     ])
       expect(select).toContain(expression);
-    expect(sql).toContain("AS\nSELECT *\nFROM (\nSELECT `id`, ");
-    expect(sql).toContain(
-      "FROM (\nSELECT * FROM `bronze`.`customers`\n) AS source\n) AS cleansed\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
+    expect(compactSql(sql)).toContain(compactSql("AS\nSELECT *\nFROM (\nSELECT `id`, "));
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "FROM (\nSELECT * FROM `bronze`.`customers`\n) AS source\n) AS cleansed\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
+      ),
     );
   });
 
   it("leaves bronze, which keeps the files as they come, uncleansed", () => {
     const sql = built(quality)["src/crm/bronze/customers.sql"]!;
-    expect(sql).toContain("AS SELECT * FROM STREAM read_files(");
+    expect(compactSql(sql)).toContain(compactSql("AS SELECT * FROM STREAM read_files("));
     expect(sql).not.toContain("_quarantine");
   });
 
@@ -49,8 +56,10 @@ describe("cleansing", () => {
       withStatus,
     );
     const sql = built(files)["src/shop/bronze/orders.sql"]!;
-    expect(sql).toContain(
-      "AS SELECT `id`, `updated_at`, trim(`state`) AS `status`, coalesce(nullif(trim(`note`), ''), 'none') AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "AS SELECT `id`, `updated_at`, trim(`state`) AS `status`, coalesce(nullif(trim(`note`), ''), 'none') AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
+      ),
     );
   });
 
@@ -61,8 +70,10 @@ describe("cleansing", () => {
       withStatus,
     );
     const sql = built(files)["src/shop/bronze/orders.sql"]!;
-    expect(sql).toContain(
-      "CREATE OR REFRESH STREAMING TABLE `bronze`.`orders_changes`\nAS SELECT `id`, `updated_at`, trim(`state`) AS `status`, trim(`note`) AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "CREATE OR REFRESH STREAMING TABLE `bronze`.`orders_changes`\nAS SELECT `id`, `updated_at`, trim(`state`) AS `status`, trim(`note`) AS `note`, * EXCEPT (`id`, `updated_at`, `state`, `note`) FROM STREAM read_files(",
+      ),
     );
   });
 
@@ -74,8 +85,10 @@ describe("cleansing", () => {
     );
     const model = modelOf(files);
     expect(model.tables[0]!.timezone).toBe("UTC");
-    expect(databricks.build(model)["src/shop/bronze/orders.sql"]).toContain(
-      "AS SELECT `id`, to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`, * EXCEPT (`id`, `updated_at`) FROM STREAM read_files(",
+    expect(compactSql(databricks.build(model)["src/shop/bronze/orders.sql"])).toContain(
+      compactSql(
+        "AS SELECT `id`, to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`, * EXCEPT (`id`, `updated_at`) FROM STREAM read_files(",
+      ),
     );
   });
 
@@ -120,8 +133,10 @@ describe("deduplicate", () => {
       shopWith("", "    cleanse:\n      deduplicate: { order_by: [updated_at] }\n", withStatus),
     );
     const sql = built(files)["src/shop/bronze/orders.sql"]!;
-    expect(sql).toContain(
-      "AS\nSELECT *\nFROM (\nSELECT * EXCEPT (`state`), `state` AS `status` FROM read_files(",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "AS\nSELECT *\nFROM (\nSELECT * EXCEPT (`state`), `state` AS `status` FROM read_files(",
+      ),
     );
     expect(sql).toContain(
       ")\n) AS cleansed\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
@@ -140,8 +155,10 @@ describe("deduplicate", () => {
       "",
     ].join("\n");
     const sql = built({ ...base, "latest.yaml": transform })["src/shop/silver/latest.sql"]!;
-    expect(sql).toContain(
-      "AS\nSELECT *\nFROM (\nSELECT * FROM `bronze`.`orders`\n) AS source\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "AS\nSELECT *\nFROM (\nSELECT * FROM `bronze`.`orders`\n) AS source\nQUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;\n",
+      ),
     );
   });
 });

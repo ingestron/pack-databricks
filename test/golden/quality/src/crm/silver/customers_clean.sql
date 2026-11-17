@@ -24,7 +24,24 @@ CLUSTER BY AUTO
 AS
 SELECT *
 FROM (
-SELECT `id`, lower(nullif(trim(`email`), '')) AS `email`, nullif(`name`, '') AS `name`, upper(CASE nullif(trim(`country`), '') WHEN 'United Kingdom' THEN 'GB' WHEN 'UK' THEN 'GB' WHEN '-' THEN NULL ELSE nullif(trim(`country`), '') END) AS `country`, coalesce(nullif(trim(`status`), ''), 'active') AS `status`, nullif(trim(`segment`), '') AS `segment`, nullif(trim(`phone`), '') AS `phone`, nullif(trim(`code`), '') AS `code`, `age`, CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`, `tags`, coalesce(`vip`, FALSE) AS `vip`, to_utc_timestamp(`signed_up`, 'Europe/London') AS `signed_up`, from_utc_timestamp(to_utc_timestamp(`contacted_at`, 'UTC'), 'Europe/London') AS `contacted_at`, convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`, to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`, * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)
+SELECT
+  `id`,
+  lower(nullif(trim(`email`), '')) AS `email`,
+  nullif(`name`, '') AS `name`,
+  upper(CASE nullif(trim(`country`), '') WHEN 'United Kingdom' THEN 'GB' WHEN 'UK' THEN 'GB' WHEN '-' THEN NULL ELSE nullif(trim(`country`), '') END) AS `country`,
+  coalesce(nullif(trim(`status`), ''), 'active') AS `status`,
+  nullif(trim(`segment`), '') AS `segment`,
+  nullif(trim(`phone`), '') AS `phone`,
+  nullif(trim(`code`), '') AS `code`,
+  `age`,
+  CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`,
+  `tags`,
+  coalesce(`vip`, FALSE) AS `vip`,
+  to_utc_timestamp(`signed_up`, 'Europe/London') AS `signed_up`,
+  from_utc_timestamp(to_utc_timestamp(`contacted_at`, 'UTC'), 'Europe/London') AS `contacted_at`,
+  convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`,
+  to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`,
+  * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)
 FROM (
 SELECT * FROM `bronze`.`customers`
 ) AS source
@@ -34,11 +51,31 @@ QUALIFY row_number() OVER (PARTITION BY `id` ORDER BY `updated_at` DESC) = 1;
 -- Rows that a check with the action drop removed from customers_clean, with the checks they failed.
 CREATE OR REFRESH MATERIALIZED VIEW `silver`.`customers_clean_quarantine`
 COMMENT 'Rows of customers_clean that failed a check that drops rows; _failed_checks names the checks.'
-AS SELECT *, filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`email` IS NOT NULL, NULL, 'email_not_null'), IF(`updated_at` IS NOT NULL, NULL, 'updated_at_not_null')), name -> name IS NOT NULL) AS _failed_checks
+AS
+SELECT
+  *,
+  filter(array(IF(`id` IS NOT NULL, NULL, 'id_not_null'), IF(`email` IS NOT NULL, NULL, 'email_not_null'), IF(`updated_at` IS NOT NULL, NULL, 'updated_at_not_null')), name -> name IS NOT NULL) AS _failed_checks
 FROM (
 SELECT *
 FROM (
-SELECT `id`, lower(nullif(trim(`email`), '')) AS `email`, nullif(`name`, '') AS `name`, upper(CASE nullif(trim(`country`), '') WHEN 'United Kingdom' THEN 'GB' WHEN 'UK' THEN 'GB' WHEN '-' THEN NULL ELSE nullif(trim(`country`), '') END) AS `country`, coalesce(nullif(trim(`status`), ''), 'active') AS `status`, nullif(trim(`segment`), '') AS `segment`, nullif(trim(`phone`), '') AS `phone`, nullif(trim(`code`), '') AS `code`, `age`, CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`, `tags`, coalesce(`vip`, FALSE) AS `vip`, to_utc_timestamp(`signed_up`, 'Europe/London') AS `signed_up`, from_utc_timestamp(to_utc_timestamp(`contacted_at`, 'UTC'), 'Europe/London') AS `contacted_at`, convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`, to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`, * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)
+SELECT
+  `id`,
+  lower(nullif(trim(`email`), '')) AS `email`,
+  nullif(`name`, '') AS `name`,
+  upper(CASE nullif(trim(`country`), '') WHEN 'United Kingdom' THEN 'GB' WHEN 'UK' THEN 'GB' WHEN '-' THEN NULL ELSE nullif(trim(`country`), '') END) AS `country`,
+  coalesce(nullif(trim(`status`), ''), 'active') AS `status`,
+  nullif(trim(`segment`), '') AS `segment`,
+  nullif(trim(`phone`), '') AS `phone`,
+  nullif(trim(`code`), '') AS `code`,
+  `age`,
+  CASE `score` WHEN -1 THEN 0 ELSE `score` END AS `score`,
+  `tags`,
+  coalesce(`vip`, FALSE) AS `vip`,
+  to_utc_timestamp(`signed_up`, 'Europe/London') AS `signed_up`,
+  from_utc_timestamp(to_utc_timestamp(`contacted_at`, 'UTC'), 'Europe/London') AS `contacted_at`,
+  convert_timezone('Europe/London', 'UTC', `last_seen`) AS `last_seen`,
+  to_utc_timestamp(`updated_at`, 'Europe/London') AS `updated_at`,
+  * EXCEPT (`id`, `email`, `name`, `country`, `status`, `segment`, `phone`, `code`, `age`, `score`, `tags`, `vip`, `signed_up`, `contacted_at`, `last_seen`, `updated_at`)
 FROM (
 SELECT * FROM `bronze`.`customers`
 ) AS source

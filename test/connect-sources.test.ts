@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Lakeflow Connect: Salesforce, Kafka, and ingestion before our own pipeline.
 import { describe, expect, it } from "vitest";
 import { databricks } from "../src/index.js";
@@ -123,7 +124,9 @@ describe("together with our own pipeline", () => {
       "totals.yaml": contract("totals"),
       "platform.yaml": platform,
     });
-    expect(output["src/shop/silver/totals.sql"]).toContain("FROM `bronze`.`orders`");
+    expect(compactSql(output["src/shop/silver/totals.sql"])).toContain(
+      compactSql("FROM `bronze`.`orders`"),
+    );
     expect(yaml("resources/shop_refresh.job.yml").resources.jobs.shop_refresh.tasks).toEqual([
       {
         task_key: "ingest_erp",

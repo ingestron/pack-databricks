@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Each Databricks option and refusal, on a one-table project in memory.
 import { memoryFiles } from "@ingestron/config";
 import { resolveDefinitions, type Pack } from "@ingestron/definitions";
@@ -21,11 +22,15 @@ const orders = (files: Record<string, string>) => files["src/shop/bronze/orders.
 describe("streaming tables", () => {
   it("reads files once each with Auto Loader, joining the connection path and the object", () => {
     const sql = orders(generate().files);
-    expect(sql).toContain(
-      "FROM STREAM read_files(\n  '/Volumes/dev/landing/shop/orders',\n  format => 'parquet'",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "FROM STREAM read_files(\n  '/Volumes/dev/landing/shop/orders',\n  format => 'parquet'",
+      ),
     );
     expect(sql).toContain("schemaHints => '`id` BIGINT, `updated_at` TIMESTAMP'");
-    expect(sql).toContain("COMMENT 'It\\'s every order.'\nCLUSTER BY AUTO\nAS SELECT");
+    expect(compactSql(sql)).toContain(
+      compactSql("COMMENT 'It\\'s every order.'\nCLUSTER BY AUTO\nAS SELECT"),
+    );
   });
 
   it("keeps history with AUTO CDC as SCD type 2", () => {
@@ -67,14 +72,16 @@ describe("physical names", () => {
     const { result, files } = generate(renamed);
     expect(result.diagnostics).toEqual([]);
     const sql = orders(files);
-    expect(sql).toContain(
-      "AS SELECT * EXCEPT (`upd_ts`), `upd_ts` AS `updated_at` FROM STREAM read_files(",
+    expect(compactSql(sql)).toContain(
+      compactSql("AS SELECT * EXCEPT (`upd_ts`), `upd_ts` AS `updated_at` FROM STREAM read_files("),
     );
     expect(sql).toContain("schemaHints => '`id` BIGINT, `upd_ts` TIMESTAMP'");
   });
 
   it("reads everything as it is when no column is renamed", () => {
-    expect(orders(generate().files)).toContain("AS SELECT * FROM STREAM read_files(");
+    expect(compactSql(orders(generate().files))).toContain(
+      compactSql("AS SELECT * FROM STREAM read_files("),
+    );
   });
 });
 
@@ -92,7 +99,7 @@ describe("materialised views", () => {
   it("reads files without STREAM when a flow stores into a view", () => {
     const sql = orders(generate(withStore("  uses: materialised-view")).files);
     expect(sql).toContain("CREATE OR REFRESH MATERIALIZED VIEW `bronze`.`orders`");
-    expect(sql).toContain("AS\nSELECT * FROM read_files(");
+    expect(compactSql(sql)).toContain(compactSql("AS\nSELECT * FROM read_files("));
   });
 
   it("refuses transform SQL that reads a table it does not list as an input", () => {
@@ -195,8 +202,10 @@ describe("columns the landed files carry beyond the contract", () => {
     );
     expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
     const sql = orders(databricks.build(result.model!));
-    expect(sql).toContain(
-      "AS SELECT * EXCEPT (`_loaded_at`), CAST(`_loaded_at` AS TIMESTAMP) AS `_loaded_at` FROM STREAM read_files(",
+    expect(compactSql(sql)).toContain(
+      compactSql(
+        "AS SELECT * EXCEPT (`_loaded_at`), CAST(`_loaded_at` AS TIMESTAMP) AS `_loaded_at` FROM STREAM read_files(",
+      ),
     );
   });
 });

@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Grants from the contracts' roles and the layers, made by the after-refresh task, with
 // USE_SCHEMA on managed schemas (spec section 8.6).
 import type { ResolvedModel } from "@ingestron/definitions";
@@ -44,7 +45,9 @@ describe("grants with manage.grants off", () => {
 describe("grants with manage.grants on", () => {
   it("keeps the identity the task runs as, asked with session_user()", () => {
     const text = built(governed).out[script] ?? "";
-    expect(text).toContain('keep.append(spark.sql("SELECT session_user()").first()[0])');
+    expect(compactSql(text)).toContain(
+      compactSql('keep.append(spark.sql("SELECT session_user()").first()[0])'),
+    );
     expect(text).not.toContain("current_user");
   });
 

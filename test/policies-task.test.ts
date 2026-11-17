@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // The after-refresh task's policy functions, run with Python: every policy exempts the
 // identity the task runs as, stale Ingestron policies are dropped and nothing else is, and
 // names are quoted (spec section 8.7). Skips, saying why, when python3 is not installed.
@@ -112,7 +113,9 @@ describe("the after-refresh task's policy functions", () => {
 
   it("asks for its own identity, and puts it first in EXCEPT", () => {
     const task = golden("masked");
-    expect(task).toContain('runner = spark.sql("SELECT session_user()").first()[0]');
+    expect(compactSql(task)).toContain(
+      compactSql('runner = spark.sql("SELECT session_user()").first()[0]'),
+    );
     expect(task).not.toContain("current_user");
     expect(task).toContain("exempt = exempt_principals(runner, ");
     expect(
@@ -155,7 +158,7 @@ describe("the after-refresh task's policy functions", () => {
     const statement = call("policy_statement", policy, ["team`s analysts"]) as string;
     expect(statement).toContain("POLICY `ingestron_mask_top``secret` ON");
     expect(statement).toContain("COLUMN MASK `prod_sales`.`gov``ernance`.`mask` TO");
-    expect(statement).toContain("EXCEPT `team``s analysts` FOR");
+    expect(compactSql(statement)).toContain(compactSql("EXCEPT `team``s analysts` FOR"));
   });
 
   it("creates each mask function with VARIANT in and out", () => {

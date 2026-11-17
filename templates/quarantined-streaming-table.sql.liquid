@@ -5,6 +5,8 @@ CREATE OR REFRESH PRIVATE STREAMING TABLE {{ checked }}
 AS {% render "read-files", source: source %};
 
 {% render "table", table: table %}
-AS SELECT * FROM STREAM({{ checked }});
+AS
+SELECT *
+FROM STREAM({{ checked }});
 
 {% render "quarantine", quarantine: quarantine %};

@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Tags, column comments and table checks: applied by a job task after each
 // refresh, only when the platform turns them on.
 import { memoryFiles } from "@ingestron/config";
@@ -83,14 +84,18 @@ describe("after each refresh", () => {
   it("counts table checks and compares them, in rows or percent", () => {
     const text = generate("{ checks: true }").out[script] ?? "";
     expect(text).toContain('"name": "some_rows"');
-    expect(text).toContain(
-      "SELECT count(*) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`",
+    expect(compactSql(text)).toContain(
+      compactSql("SELECT count(*) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`"),
     );
-    expect(text).toContain(
-      "SELECT count(*) - count(DISTINCT `id`) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`",
+    expect(compactSql(text)).toContain(
+      compactSql(
+        "SELECT count(*) - count(DISTINCT `id`) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`",
+      ),
     );
-    expect(text).toContain(
-      "SELECT count_if(`email` IS NULL) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`",
+    expect(compactSql(text)).toContain(
+      compactSql(
+        "SELECT count_if(`email` IS NULL) AS counted, count(*) AS total FROM `dev`.`bronze`.`orders`",
+      ),
     );
     expect(text).toContain('"unit": "percent"');
   });
