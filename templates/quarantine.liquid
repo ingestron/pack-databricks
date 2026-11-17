@@ -2,6 +2,9 @@
 -- Rows that a check with the action drop removed from {{ quarantine.table }}, with the checks they failed.
 CREATE OR REFRESH {{ quarantine.kind }} {{ quarantine.target }}
 COMMENT {{ quarantine.comment }}
-AS SELECT *, {{ quarantine.failed }} AS {{ quarantine.column }}
+AS
+SELECT
+  *,
+  {{ quarantine.failed }} AS {{ quarantine.column }}
 FROM {{ quarantine.rows }}
 WHERE {{ quarantine.keep }}{%- comment %}{% endcomment -%}

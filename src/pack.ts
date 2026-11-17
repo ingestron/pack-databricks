@@ -99,8 +99,7 @@ export const databricks: Pack = {
     const problems: string[] = [];
     if (!model.platform.compute.serverless)
       problems.push("classic compute is not supported yet; leave compute.serverless at true");
-    if (model.tables.length === 0)
-      problems.push("there is nothing to generate: add a flow or a transform");
+    // A platform-first project is valid before its first flow is added.
     return [
       ...problems,
       ...tagProblems(model),

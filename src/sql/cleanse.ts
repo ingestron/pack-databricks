@@ -121,8 +121,8 @@ export function cleansedQuery(table: ResolvedTable, query: string): string {
     const expression = cleansedColumn(table, column, names[at]!);
     return expression === undefined ? names[at]! : `${expression} AS ${names[at]!}`;
   });
-  const list = [...selected, `* EXCEPT (${names.join(", ")})`].join(", ");
-  const cleansed = `SELECT ${list}\nFROM (\n${query}\n) AS source`;
+  const list = [...selected, `* EXCEPT (${names.join(", ")})`].join(",\n  ");
+  const cleansed = `SELECT\n  ${list}\nFROM (\n${query}\n) AS source`;
   return deduplicated(table, cleansed, "cleansed");
 }
 

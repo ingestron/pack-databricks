@@ -1171,3 +1171,7 @@ when any mask or filter is applied:
   matches nothing and hides no row), with the values the filters and the
   contracts' column tags give it, when they give any:
   ``Governed tag `region`, which a row filter matches; an account administrator creates it, and the run_as identity needs ASSIGN on it.``
+
+## Generated SQL layout
+
+Generated read_files queries put SELECT and FROM on separate lines and separate generated projections with indented line breaks. Quarantine queries separate AS, SELECT and FROM. Quoting and source values remain unchanged; authored transform SQL is preserved.

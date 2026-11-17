@@ -1,3 +1,4 @@
+import { compactSql } from "./sql-text.js";
 // Audit and rescued columns that the pack's own reading of files adds.
 import { memoryFiles } from "@ingestron/config";
 import { resolveDefinitions } from "@ingestron/definitions";
@@ -32,8 +33,10 @@ describe("audit columns", () => {
   it("selects the load time and the file after the columns read, and keeps rescued data", () => {
     const files = folded(retailWithBronze("audit: [loaded_at, source_file], rescued: true"));
     const customers = files["src/retail/bronze/customers.sql"]!;
-    expect(customers).toContain(
-      "AS SELECT *, current_timestamp() AS _loaded_at, _metadata.file_path AS _source_file FROM STREAM read_files(",
+    expect(compactSql(customers)).toContain(
+      compactSql(
+        "AS SELECT *, current_timestamp() AS _loaded_at, _metadata.file_path AS _source_file FROM STREAM read_files(",
+      ),
     );
     expect(customers).toContain("rescuedDataColumn => '_rescued_data'");
   });
@@ -41,8 +44,10 @@ describe("audit columns", () => {
   it("adds them to the changes a change-data table reads", () => {
     const files = folded(retailWithBronze("audit: [source_modified_at]"));
     const orders = files["src/retail/bronze/orders.sql"]!;
-    expect(orders).toContain(
-      "AS SELECT *, _metadata.file_modification_time AS _source_modified_at FROM STREAM read_files(",
+    expect(compactSql(orders)).toContain(
+      compactSql(
+        "AS SELECT *, _metadata.file_modification_time AS _source_modified_at FROM STREAM read_files(",
+      ),
     );
     expect(orders).not.toContain("rescuedDataColumn");
   });
